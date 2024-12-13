@@ -1,0 +1,139 @@
+# Tech Stack
+
+## Overview
+This document outlines the complete technology stack required to implement the live simulation system. It includes all necessary tools, libraries, and frameworks for the backend, frontend, and data integration processes, emphasizing modularity and scalability for future expansions.
+
+---
+
+## Core Technologies
+
+### **1. Programming Languages**
+- **Python**:
+  - Used for backend development, including the simulation engine and translator module.
+  - Chosen for its simplicity, extensive libraries, and ease of integration.
+- **JavaScript/TypeScript**:
+  - Used for frontend development with React.js and spread.gl.
+  - Enables dynamic and interactive web interfaces.
+
+---
+
+### **2. Backend Stack**
+
+#### **Frameworks and Tools**
+1. **Flask** or **FastAPI**:
+   - Lightweight frameworks for building REST APIs.
+   - **FastAPI** is preferred for its speed and built-in asynchronous support.
+
+2. **Redis**:
+   - In-memory caching system to store frequently accessed data (e.g., country stats).
+   - Optimizes performance for real-time data delivery.
+
+3. **NumPy** and **SimPy**:
+   - **NumPy**: Efficient numerical computations for infection dynamics.
+   - **SimPy**: Event-driven simulation framework to model transmission and mutation events.
+
+4. **APIs for Crypto Data**:
+   - **CoinGecko API**: Fetch real-time metrics like market cap, trading volume, and price changes.
+   - **Binance API**: Retrieve whale events and additional market data.
+
+#### **Backend Data Flow**
+- **Input**:
+  - Raw data from crypto APIs.
+- **Translator Module**:
+  - Maps crypto data to simulation parameters.
+- **Simulation Engine**:
+  - Processes translated parameters and produces country-level infection data.
+- **Output**:
+  - Exposes data to the frontend through REST APIs or WebSockets.
+
+---
+
+### **3. Frontend Stack**
+
+#### **Frameworks and Libraries**
+1. **React.js**:
+   - Component-based library for building the interactive user interface.
+   - Simplifies state management and integration with backend data.
+
+2. **spread.gl**:
+   - Provides the base framework for map rendering and animations.
+   - Supports multi-layered visualizations (e.g., heatmaps, arcs for routes).
+
+3. **Kepler.gl**:
+   - Integrated with spread.gl for high-performance visualization of geospatial data.
+
+4. **WebSocket Support**:
+   - **socket.io-client**: Enables real-time updates for infection and route data.
+
+#### **Frontend Data Flow**
+- **Input**:
+  - API responses or WebSocket streams from the backend.
+- **Processing**:
+  - Map overlays, animations, and country-level interactivity.
+- **Output**:
+  - Interactive visualization rendered in the browser.
+
+---
+
+### **4. Deployment**
+
+#### **Backend Hosting**
+1. **AWS EC2** or **Heroku**:
+   - **AWS EC2**: Offers scalability and control for the backend simulation engine.
+   - **Heroku**: Simplifies deployment for MVP purposes.
+
+2. **Docker**:
+   - Containerize backend services for consistent deployment across environments.
+
+#### **Frontend Hosting**
+1. **Vercel** or **Netlify**:
+   - CI/CD-enabled platforms for hosting React-based applications.
+   - Ideal for rapid deployment and seamless updates.
+
+#### **Domain and SSL**
+- **Cloudflare**:
+  - Manage DNS and provide free SSL certificates for secure access.
+
+---
+
+### **5. Database and Caching**
+
+1. **PostgreSQL**:
+   - Primary database for storing static data (e.g., country metadata, predefined routes).
+
+2. **Redis**:
+   - Cache dynamic data (e.g., simulation outputs) for faster access during high-traffic periods.
+
+---
+
+### **6. Testing and Validation**
+
+#### **Backend Testing**
+1. **pytest**:
+   - Unit testing for the simulation engine and translator module.
+2. **Postman**:
+   - API testing and validation.
+
+#### **Frontend Testing**
+1. **Jest**:
+   - Unit tests for React components.
+2. **Cypress**:
+   - End-to-end testing for frontend-backend integration.
+
+---
+
+## Tools for Development and Collaboration
+
+1. **Version Control**:
+   - **Git** and **GitHub** for code management.
+2. **IDE**:
+   - **Cursor IDE**: AI-assisted development environment for managing `.cursorrules` files and collaborative coding.
+3. **Task Management**:
+   - **Jira** or **Trello**: For tracking progress across development phases.
+4. **Documentation**:
+   - Markdown files for technical references, managed within the GitHub repository.
+
+---
+
+## Summary
+This tech stack balances simplicity for MVP development with flexibility for future scalability. Each tool and library has been chosen to support modularity, performance, and seamless integration across all system components.
