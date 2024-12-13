@@ -1,5 +1,5 @@
 import React from 'react';
-import MapView from './components/MapView';
+import Test from './components/Test';
 import './styles/map.css';
 
 function App() {
@@ -12,7 +12,7 @@ function App() {
       left: 0,
       overflow: 'hidden'
     }}>
-      <MapView />
+      <Test />
     </div>
   );
 }
