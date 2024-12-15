@@ -41,61 +41,117 @@ class TranslatorBridge {
 
     async setupSocketConnection() {
         return new Promise((resolve, reject) => {
-            try {
-                if (this.socket) {
-                    this.socket.removeAllListeners();
-                    this.socket.close();
-                    this.socket = null;
+            let connectionTimeout;
+            let connectionAttempts = 0;
+            const maxAttempts = 3;
+            const attemptDelay = 500;
+
+            const cleanup = () => {
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                    connectionTimeout = null;
                 }
+            };
 
-                console.log('Creating WebSocket connection...');
-                this.socket = new WebSocket(`ws://127.0.0.1:${this.port}/translator`);
+            const attemptConnection = () => {
+                connectionAttempts++;
                 
-                let connectionTimeout = setTimeout(() => {
-                    if (!this.isConnected) {
-                        console.error('Connection timeout, closing socket...');
-                        this.socket.close();
-                        reject(new Error('Connection timeout'));
+                try {
+                    // Safely close existing socket if any
+                    if (this.socket) {
+                        try {
+                            if (this.socket.readyState === WebSocket.CONNECTING) {
+                                // For connecting sockets, just remove listeners
+                                this.socket.removeAllListeners();
+                            } else if (this.socket.readyState !== WebSocket.CLOSED) {
+                                this.socket.removeAllListeners();
+                                this.socket.close();
+                            }
+                        } catch (err) {
+                            console.warn('Error cleaning up existing socket:', err);
+                        }
                     }
-                }, 5000);
+                    this.socket = null;
 
-                this.socket.on('open', async () => {
-                    console.log('WebSocket connection opened');
-                    clearTimeout(connectionTimeout);
+                    console.log(`Creating WebSocket connection (attempt ${connectionAttempts})...`);
+                    this.socket = new WebSocket(`ws://127.0.0.1:${this.port}/translator`);
                     
-                    // Setup message handler
-                    this.setupMessageHandler();
-                    
-                    // Mark as connected
-                    this.isConnected = true;
-                    this.reconnectAttempts = 0;
-                    this.reconnectDelay = 1000;
-                    
-                    console.log('TranslatorBridge: WebSocket connection established');
-                    resolve();
-                });
+                    connectionTimeout = setTimeout(() => {
+                        cleanup();
+                        if (!this.isConnected && this.socket) {
+                            console.log('Connection timeout');
+                            try {
+                                if (this.socket.readyState === WebSocket.CONNECTING) {
+                                    this.socket.removeAllListeners();
+                                } else if (this.socket.readyState !== WebSocket.CLOSED) {
+                                    this.socket.close();
+                                }
+                            } catch (err) {
+                                console.warn('Error closing socket on timeout:', err);
+                            }
+                            this.socket = null;
+                            
+                            if (connectionAttempts < maxAttempts) {
+                                console.log(`Retrying connection after ${attemptDelay}ms...`);
+                                setTimeout(attemptConnection, attemptDelay);
+                            } else {
+                                reject(new Error('Connection timeout after max attempts'));
+                            }
+                        }
+                    }, 5000);
 
-                this.socket.on('close', (code, reason) => {
-                    console.log(`WebSocket connection closed: ${code} - ${reason}`);
-                    clearTimeout(connectionTimeout);
-                    this.isConnected = false;
-                    console.log(`TranslatorBridge: WebSocket closed with code ${code}`);
-                    this.handleDisconnection();
-                });
+                    this.socket.on('open', async () => {
+                        cleanup();
+                        console.log('WebSocket connection opened');
+                        
+                        this.setupMessageHandler();
+                        this.isConnected = true;
+                        this.reconnectAttempts = 0;
+                        this.reconnectDelay = 1000;
+                        
+                        // Allow connection to stabilize
+                        await new Promise(r => setTimeout(r, 200));
+                        
+                        resolve(true);
+                    });
 
-                this.socket.on('error', (error) => {
-                    console.error('WebSocket error:', error);
-                    clearTimeout(connectionTimeout);
-                    console.error('TranslatorBridge: WebSocket error:', error);
-                    if (!this.isConnected) {
+                    this.socket.on('close', (code, reason) => {
+                        cleanup();
+                        console.log(`WebSocket connection closed: ${code} - ${reason}`);
+                        this.isConnected = false;
+                        if (!this.isConnected && connectionAttempts < maxAttempts) {
+                            console.log(`Retrying connection after ${attemptDelay}ms...`);
+                            setTimeout(attemptConnection, attemptDelay);
+                        } else {
+                            this.handleDisconnection();
+                        }
+                    });
+
+                    this.socket.on('error', (error) => {
+                        cleanup();
+                        console.error('WebSocket error:', error);
+                        if (!this.isConnected) {
+                            if (connectionAttempts < maxAttempts) {
+                                console.log(`Retrying connection after ${attemptDelay}ms...`);
+                                setTimeout(attemptConnection, attemptDelay);
+                            } else {
+                                reject(error);
+                            }
+                        }
+                    });
+                } catch (error) {
+                    cleanup();
+                    console.error('Error setting up WebSocket:', error);
+                    if (connectionAttempts < maxAttempts) {
+                        console.log(`Retrying connection after ${attemptDelay}ms...`);
+                        setTimeout(attemptConnection, attemptDelay);
+                    } else {
                         reject(error);
                     }
-                });
-            } catch (error) {
-                console.error('Error setting up WebSocket:', error);
-                clearTimeout(connectionTimeout);
-                reject(error);
-            }
+                }
+            };
+
+            attemptConnection();
         });
     }
 
@@ -139,7 +195,17 @@ class TranslatorBridge {
 
     async handleMarketUpdate(data) {
         try {
-            const translatedData = this.translateMarketData(data);
+            const translatedData = {
+                marketMetrics: {
+                    price: data.price || 0,
+                    volume: data.volume || 0,
+                    marketCap: data.marketCap || 0,
+                    volatility: data.volatility || 0
+                },
+                sequence: data.sequence,
+                timestamp: Date.now()
+            };
+
             if (!this.isConnected) {
                 await this.setupSocketConnection();
             }
@@ -152,11 +218,8 @@ class TranslatorBridge {
             
             await this.sendMessage(message);
             this.stateSync.update(translatedData);
-            
-            // Don't notify subscribers here, let the WebSocket message handle it
             return translatedData;
         } catch (error) {
-            console.error('Error handling market update:', error);
             this.eventEmitter.emit('error', {
                 type: 'marketUpdate',
                 error: error.message
@@ -166,7 +229,6 @@ class TranslatorBridge {
     }
 
     translateMarketData(data) {
-        // Ensure consistent format with handleIncomingMessage
         return {
             marketMetrics: {
                 price: data.price || 0,
@@ -182,7 +244,7 @@ class TranslatorBridge {
     notifySubscribers(eventType, data) {
         const callbacks = this.subscriptions.get(eventType);
         if (!callbacks || callbacks.size === 0) {
-            return;
+            return Promise.resolve();
         }
 
         console.log(`Notifying ${callbacks.size} subscribers for ${eventType}`);
@@ -190,9 +252,9 @@ class TranslatorBridge {
         // Create a copy of the callbacks to avoid modification during iteration
         const callbacksArray = Array.from(callbacks);
         
-        // Ensure immediate execution of callbacks
-        setImmediate(() => {
-            for (const callback of callbacksArray) {
+        // Return a promise that resolves when all callbacks are executed
+        return Promise.all(callbacksArray.map(callback => {
+            return new Promise(resolve => {
                 try {
                     if (callback && typeof callback === 'function') {
                         callback(data);
@@ -205,8 +267,9 @@ class TranslatorBridge {
                         eventType
                     });
                 }
-            }
-        });
+                resolve();
+            });
+        }));
     }
 
     handleDisconnection() {
@@ -318,7 +381,7 @@ class TranslatorBridge {
         }
     }
 
-    handleIncomingMessage(data) {
+    async handleIncomingMessage(data) {
         try {
             const parsedData = JSON.parse(data);
             console.log('Received message:', parsedData.type);
@@ -360,7 +423,7 @@ class TranslatorBridge {
                 };
                 
                 // Always notify subscribers during message processing
-                this.notifySubscribers('marketUpdate', response);
+                await this.notifySubscribers('marketUpdate', response);
                 this.eventEmitter.emit('marketUpdate', response);
                 
                 return;
@@ -370,7 +433,7 @@ class TranslatorBridge {
             this.messageQueue.addMessage(parsedData, parsedData.priority || 1);
             
             // Process message queue synchronously
-            this.processMessageQueue();
+            await this.processMessageQueue();
         } catch (error) {
             console.error('Error handling incoming message:', error);
             this.eventEmitter.emit('error', {
@@ -380,7 +443,7 @@ class TranslatorBridge {
         }
     }
 
-    processMessageQueue() {
+    async processMessageQueue() {
         while (!this.messageQueue.isEmpty()) {
             const nextMessage = this.messageQueue.getNextMessage();
             if (nextMessage) {
@@ -392,7 +455,7 @@ class TranslatorBridge {
                 };
                 
                 // Always notify subscribers during message processing
-                this.notifySubscribers(nextMessage.type, response);
+                await this.notifySubscribers(nextMessage.type, response);
                 this.eventEmitter.emit(nextMessage.type, response);
                 
                 // Emit messageProcessed event for testing
@@ -450,6 +513,7 @@ class TranslatorBridge {
     async cleanup() {
         return new Promise((resolve) => {
             const cleanupComplete = () => {
+                // Clear all intervals and timeouts
                 if (this.heartbeatInterval) {
                     clearInterval(this.heartbeatInterval);
                     this.heartbeatInterval = null;
@@ -460,18 +524,34 @@ class TranslatorBridge {
                     this.reconnectTimeout = null;
                 }
 
+                if (this._cleanupTimeout) {
+                    clearTimeout(this._cleanupTimeout);
+                    this._cleanupTimeout = null;
+                }
+
                 this.isConnected = false;
                 this.isReconnecting = false;
                 this.messageCount = 0;
                 
                 // Clear event handlers
                 if (this.socket && this.boundMessageHandler) {
-                    this.socket.removeListener('message', this.boundMessageHandler);
+                    try {
+                        this.socket.removeListener('message', this.boundMessageHandler);
+                    } catch (err) {
+                        console.warn('Error removing message listener:', err);
+                    }
                 }
                 this.boundMessageHandler = null;
                 
                 // Clear event emitter unless we're in reconnection
                 if (!this._pendingEventEmitterSubscriptions) {
+                    // Get all event names
+                    const eventNames = this.eventEmitter.eventNames();
+                    // Remove all listeners for each event
+                    eventNames.forEach(eventName => {
+                        this.eventEmitter.removeAllListeners(eventName);
+                    });
+                    // Reset event emitter
                     this.eventEmitter.removeAllListeners();
                 }
                 
@@ -480,25 +560,54 @@ class TranslatorBridge {
                     this.subscriptions.clear();
                 }
                 
+                // Clear any remaining timeouts
+                const maxTimeoutId = setTimeout(() => {}, 0);
+                for (let i = 1; i < maxTimeoutId; i++) {
+                    clearTimeout(i);
+                    clearInterval(i);
+                }
+                clearTimeout(maxTimeoutId);
+                
+                // Clear any remaining state
+                this.messageQueue = new MessageQueue();
+                this.stateSync = new StateSync();
+                
                 resolve();
             };
 
             if (this.socket) {
                 const socket = this.socket;
-                this.socket = null; // Clear reference first
-                
-                socket.removeAllListeners();
-                socket.once('close', cleanupComplete);
+                this.socket = null; // Clear reference first to prevent new operations
                 
                 try {
-                    socket.close(1000, 'Normal closure');
+                    // Remove all listeners before closing
+                    socket.removeAllListeners();
+                    
+                    if (socket.readyState !== WebSocket.CLOSED) {
+                        // Add a single close listener for cleanup
+                        socket.once('close', () => {
+                            if (this._cleanupTimeout) {
+                                clearTimeout(this._cleanupTimeout);
+                                this._cleanupTimeout = null;
+                            }
+                            cleanupComplete();
+                        });
+                        
+                        socket.close(1000, 'Normal closure');
+                        
+                        // Set a timeout to force cleanup if close event doesn't fire
+                        this._cleanupTimeout = setTimeout(() => {
+                            console.warn('Socket close event timed out, forcing cleanup');
+                            socket.terminate();
+                            cleanupComplete();
+                        }, 1000);
+                    } else {
+                        cleanupComplete();
+                    }
                 } catch (error) {
-                    console.error('Error during socket close:', error);
+                    console.warn('Error during socket cleanup:', error);
                     cleanupComplete();
                 }
-
-                // Ensure cleanup completes even if close event doesn't fire
-                setTimeout(cleanupComplete, 100);
             } else {
                 cleanupComplete();
             }

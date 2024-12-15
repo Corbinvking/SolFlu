@@ -1,5 +1,5 @@
 import pytest
-from sir_model import SIRModel
+from .sir_model import SIRModel
 import numpy as np
 
 @pytest.fixture

@@ -11,6 +11,93 @@ const PORTS = {
     MARKET_UPDATE: 8012
 };
 
+// Global instance tracking
+const activeBridges = new Set();
+const activeServers = new Set();
+
+// Global cleanup
+afterAll(async () => {
+    console.log('Running global cleanup...');
+    
+    // Cleanup any remaining instances
+    for (const bridge of activeBridges) {
+        if (bridge) {
+            try {
+                // Remove all event listeners
+                if (bridge.eventEmitter) {
+                    const eventNames = bridge.eventEmitter.eventNames();
+                    eventNames.forEach(eventName => {
+                        bridge.eventEmitter.removeAllListeners(eventName);
+                    });
+                }
+                
+                // Ensure heartbeat interval is cleared
+                if (bridge.heartbeatInterval) {
+                    clearInterval(bridge.heartbeatInterval);
+                    bridge.heartbeatInterval = null;
+                }
+                
+                // Ensure reconnect timeout is cleared
+                if (bridge.reconnectTimeout) {
+                    clearTimeout(bridge.reconnectTimeout);
+                    bridge.reconnectTimeout = null;
+                }
+                
+                // Cleanup the bridge
+                await bridge.cleanup();
+                
+                // Clear any remaining references
+                bridge.socket = null;
+                bridge.messageQueue = null;
+                bridge.stateSync = null;
+                bridge.eventEmitter = null;
+                
+                // Clear subscriptions
+                if (bridge.subscriptions) {
+                    bridge.subscriptions.clear();
+                }
+                
+                bridge._pendingSubscriptions = null;
+                bridge._pendingEventEmitterSubscriptions = null;
+            } catch (err) {
+                console.warn('Error cleaning up bridge:', err);
+            }
+        }
+    }
+    activeBridges.clear();
+    
+    // Enhanced server cleanup
+    for (const server of activeServers) {
+        if (server) {
+            try {
+                await cleanupMockServer(server);
+            } catch (err) {
+                console.warn('Error cleaning up server:', err);
+            }
+        }
+    }
+    activeServers.clear();
+    
+    // Clear any remaining timeouts or intervals
+    const maxTimeoutId = setTimeout(() => {}, 0);
+    for (let i = 1; i < maxTimeoutId; i++) {
+        clearTimeout(i);
+        clearInterval(i);
+    }
+    clearTimeout(maxTimeoutId);
+    
+    // Wait for any remaining operations to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Force garbage collection if available
+    if (global.gc) {
+        global.gc();
+    }
+    
+    // Final wait to ensure all resources are released
+    await new Promise(resolve => setTimeout(resolve, 500));
+}, 30000); // Increased timeout for thorough cleanup
+
 // Helper function to create mock server with retry
 const createMockServer = async (port, messageHandler, retryCount = 3) => {
     for (let attempt = 1; attempt <= retryCount; attempt++) {
@@ -53,18 +140,67 @@ const createMockServer = async (port, messageHandler, retryCount = 3) => {
 // Helper function to cleanup mock server with timeout
 const cleanupMockServer = async (server) => {
     if (server) {
+        // Clear any pending message timeouts
+        if (server.messageTimeouts) {
+            for (const timeout of server.messageTimeouts) {
+                clearTimeout(timeout);
+            }
+            server.messageTimeouts.clear();
+        }
+
         await new Promise((resolve) => {
             const timeout = setTimeout(() => {
                 console.log('Mock server close timed out, forcing cleanup');
+                if (server.clients) {
+                    server.clients.forEach(client => {
+                        try {
+                            client.removeAllListeners();
+                            client.terminate();
+                        } catch (err) {
+                            console.warn('Error terminating client:', err);
+                        }
+                    });
+                }
+                server.removeAllListeners();
                 resolve();
             }, 1000);
 
-            server.close(() => {
+            try {
+                // Remove all listeners first
+                server.removeAllListeners();
+                
+                // Close all existing connections
+                if (server.clients) {
+                    server.clients.forEach(client => {
+                        try {
+                            client.removeAllListeners();
+                            client.close();
+                        } catch (err) {
+                            console.warn('Error closing client:', err);
+                            try {
+                                client.terminate();
+                            } catch (termErr) {
+                                console.warn('Error terminating client:', termErr);
+                            }
+                        }
+                    });
+                }
+                
+                // Close the server
+                server.close(() => {
+                    clearTimeout(timeout);
+                    console.log('Mock server closed cleanly');
+                    resolve();
+                });
+            } catch (error) {
+                console.warn('Error during server cleanup:', error);
                 clearTimeout(timeout);
-                console.log('Mock server closed');
-                setTimeout(resolve, 100);
-            });
+                resolve();
+            }
         });
+        
+        // Additional wait to ensure all resources are released
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
 };
 
@@ -89,8 +225,10 @@ describe('TranslatorBridge Basic Tests', () => {
                     console.error('Mock server message handling error:', error);
                 }
             });
+            activeServers.add(mockServer);
             
             bridge = new TranslatorBridge({ port: PORTS.BASIC });
+            activeBridges.add(bridge);
             await sleep(500);
         } catch (error) {
             console.error('Failed to setup basic test:', error);
@@ -103,9 +241,14 @@ describe('TranslatorBridge Basic Tests', () => {
         try {
             if (bridge) {
                 await bridge.cleanup();
+                activeBridges.delete(bridge);
                 bridge = null;
             }
-            await cleanupMockServer(mockServer);
+            if (mockServer) {
+                await cleanupMockServer(mockServer);
+                activeServers.delete(mockServer);
+                mockServer = null;
+            }
         } catch (error) {
             console.error('Basic test cleanup error:', error);
         }
@@ -116,20 +259,26 @@ describe('TranslatorBridge Basic Tests', () => {
     test('should successfully connect to WebSocket server', async () => {
         const initPromise = bridge.initialize();
         
-        // Set up event tracking
+        // Set up event tracking with cleanup
         const events = [];
-        bridge.eventEmitter.on('error', err => events.push(['error', err]));
+        const errorHandler = err => events.push(['error', err]);
+        bridge.eventEmitter.on('error', errorHandler);
         
-        const connected = await initPromise;
-        expect(connected).toBe(true);
-        expect(bridge.isConnected).toBe(true);
-        
-        // Wait for any post-connection events
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Check for any errors
-        const errors = events.filter(([type]) => type === 'error');
-        expect(errors).toHaveLength(0);
+        try {
+            const connected = await initPromise;
+            expect(connected).toBe(true);
+            expect(bridge.isConnected).toBe(true);
+            
+            // Wait for any post-connection events
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Check for any errors
+            const errors = events.filter(([type]) => type === 'error');
+            expect(errors).toHaveLength(0);
+        } finally {
+            // Clean up event listener
+            bridge.eventEmitter.removeListener('error', errorHandler);
+        }
     });
 
     test('should maintain connection with heartbeat', async () => {
@@ -141,32 +290,43 @@ describe('TranslatorBridge Basic Tests', () => {
     });
 
     test('should handle concurrent connection attempts', async () => {
-        const attempts = 2;
-        const connections = Array(attempts).fill(null).map(() => new TranslatorBridge());
+        // Create multiple TranslatorBridge instances
+        const numConnections = 3;
+        const connections = Array.from({ length: numConnections }, () => new TranslatorBridge({ port: 8006 }));
+        
+        // Initialize all connections concurrently
+        const results = await Promise.all(
+            connections.map(async (bridge) => {
+                try {
+                    const result = await bridge.initialize();
+                    return result;
+                } catch (error) {
+                    console.error('Connection attempt failed:', error);
+                    return false;
+                }
+            })
+        );
         
         try {
-            // Try to connect all bridges simultaneously
-            const results = await Promise.all(
-                connections.map(conn => conn.initialize())
-            );
+            // Verify results
+            results.forEach((result, index) => {
+                expect(result).toBe(true);
+                expect(connections[index].isConnected).toBe(true);
+            });
             
-            // All connections should succeed
-            results.forEach(result => expect(result).toBe(true));
-            
-            // Wait to verify stability
-            await sleep(1000);
+            // Wait for connections to stabilize
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Verify all connections are still active
-            connections.forEach(conn => {
-                expect(conn.isConnected).toBe(true);
+            connections.forEach(bridge => {
+                expect(bridge.isConnected).toBe(true);
+                expect(bridge.socket.readyState).toBe(WebSocket.OPEN);
             });
         } finally {
-            // Cleanup all connections
-            await Promise.all(
-                connections.map(conn => conn.cleanup())
-            );
+            // Clean up all connections
+            await Promise.all(connections.map(bridge => bridge.cleanup()));
         }
-    });
+    }, 10000);
 
     test('should handle rapid connect/disconnect cycles', async () => {
         const cycles = 3;
@@ -199,7 +359,6 @@ describe('TranslatorBridge Subscription Persistence Tests', () => {
     beforeEach(async () => {
         console.log('Setting up subscription persistence test...');
         try {
-            // Create mock server with subscription handler
             mockServer = await createMockServer(PORTS.SUBSCRIPTION, (ws) => (msg) => {
                 try {
                     const data = JSON.parse(msg);
@@ -223,12 +382,14 @@ describe('TranslatorBridge Subscription Persistence Tests', () => {
                     console.error('Mock server message handling error:', error);
                 }
             });
+            activeServers.add(mockServer);
             
             bridge = new TranslatorBridge({ port: PORTS.SUBSCRIPTION });
+            activeBridges.add(bridge);
             await bridge.initialize();
             await sleep(500);
         } catch (error) {
-            console.error('Failed to setup subscription test:', error);
+            console.error('Failed to setup subscription persistence test:', error);
             throw error;
         }
     });
@@ -238,9 +399,14 @@ describe('TranslatorBridge Subscription Persistence Tests', () => {
         try {
             if (bridge) {
                 await bridge.cleanup();
-                await sleep(500);
+                activeBridges.delete(bridge);
+                bridge = null;
             }
-            await cleanupMockServer(mockServer);
+            if (mockServer) {
+                await cleanupMockServer(mockServer);
+                activeServers.delete(mockServer);
+                mockServer = null;
+            }
         } catch (error) {
             console.error('Subscription persistence test cleanup error:', error);
         }
@@ -345,8 +511,10 @@ describe('TranslatorBridge Market Update Test', () => {
                     console.error('Mock server message handling error:', error);
                 }
             });
+            activeServers.add(mockServer);
             
             bridge = new TranslatorBridge({ port: PORTS.MARKET_UPDATE });
+            activeBridges.add(bridge);
             await sleep(500);
         } catch (error) {
             console.error('Failed to setup market update test:', error);
@@ -359,9 +527,14 @@ describe('TranslatorBridge Market Update Test', () => {
         try {
             if (bridge) {
                 await bridge.cleanup();
-                await sleep(500);
+                activeBridges.delete(bridge);
+                bridge = null;
             }
-            await cleanupMockServer(mockServer);
+            if (mockServer) {
+                await cleanupMockServer(mockServer);
+                activeServers.delete(mockServer);
+                mockServer = null;
+            }
         } catch (error) {
             console.error('Market update test cleanup error:', error);
         }
@@ -477,8 +650,10 @@ describe('TranslatorBridge Network Interruption Test', () => {
                     console.error('Mock server message handling error:', error);
                 }
             });
+            activeServers.add(mockServer);
             
             bridge = new TranslatorBridge({ port: PORTS.NETWORK });
+            activeBridges.add(bridge);
             await sleep(500);
         } catch (error) {
             console.error('Failed to setup network test:', error);
@@ -491,9 +666,14 @@ describe('TranslatorBridge Network Interruption Test', () => {
         try {
             if (bridge) {
                 await bridge.cleanup();
-                await sleep(500);
+                activeBridges.delete(bridge);
+                bridge = null;
             }
-            await cleanupMockServer(mockServer);
+            if (mockServer) {
+                await cleanupMockServer(mockServer);
+                activeServers.delete(mockServer);
+                mockServer = null;
+            }
         } catch (error) {
             console.error('Network interruption test cleanup error:', error);
         }
@@ -591,6 +771,9 @@ describe('TranslatorBridge Message Order Test', () => {
     beforeEach(async () => {
         console.log('Setting up message order test...');
         try {
+            // Store timeouts for cleanup
+            const messageTimeouts = new Set();
+            
             mockServer = await createMockServer(PORTS.MESSAGE_ORDER, (ws) => (msg) => {
                 try {
                     const data = JSON.parse(msg);
@@ -616,19 +799,26 @@ describe('TranslatorBridge Message Order Test', () => {
                         };
                         console.log('Mock server sending:', response);
                         
-                        // Ensure immediate response
-                        setImmediate(() => {
+                        // Use setTimeout instead of setImmediate and track the timeout
+                        const timeout = setTimeout(() => {
                             if (ws.readyState === WebSocket.OPEN) {
                                 ws.send(JSON.stringify(response));
                             }
-                        });
+                            messageTimeouts.delete(timeout);
+                        }, 0);
+                        messageTimeouts.add(timeout);
                     }
                 } catch (error) {
                     console.error('Mock server message handling error:', error);
                 }
             });
+            activeServers.add(mockServer);
+            
+            // Attach the timeouts set to the server for cleanup
+            mockServer.messageTimeouts = messageTimeouts;
             
             bridge = new TranslatorBridge({ port: PORTS.MESSAGE_ORDER });
+            activeBridges.add(bridge);
             await bridge.initialize();
             await sleep(500);
         } catch (error) {
@@ -642,9 +832,14 @@ describe('TranslatorBridge Message Order Test', () => {
         try {
             if (bridge) {
                 await bridge.cleanup();
-                await sleep(500);
+                activeBridges.delete(bridge);
+                bridge = null;
             }
-            await cleanupMockServer(mockServer);
+            if (mockServer) {
+                await cleanupMockServer(mockServer);
+                activeServers.delete(mockServer);
+                mockServer = null;
+            }
         } catch (error) {
             console.error('Message order test cleanup error:', error);
         }
