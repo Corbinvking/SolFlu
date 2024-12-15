@@ -1,0 +1,13 @@
+2024-12-14 16:04:53,564 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:05:53,593 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:06:53,610 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:07:23,621 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:10:05,107 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:10:05,107 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:10:35,133 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:10:35,133 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:11:35,146 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:11:35,146 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:12:05,160 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:12:05,160 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 17:50:25,943 - translator_api - ERROR - Error processing message: 1005

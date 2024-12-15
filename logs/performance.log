@@ -1,0 +1,86 @@
+2024-12-14 10:50:38,963 - translator_api - INFO - Application startup complete
+2024-12-14 10:50:38,963 - translator_api - INFO - Application startup complete
+2024-12-14 11:02:07,690 - translator_api - INFO - Application startup complete
+2024-12-14 11:02:22,262 - translator_api - INFO - Application startup complete
+2024-12-14 11:02:49,440 - translator_api - INFO - Application startup complete
+2024-12-14 11:02:50,262 - translator_api - INFO - Application startup complete
+2024-12-14 11:02:54,872 - translator_api - INFO - Application startup complete
+2024-12-14 11:09:20,192 - translator_api - INFO - Application startup complete
+2024-12-14 11:09:25,245 - translator_api - INFO - Application startup complete
+2024-12-14 11:12:02,201 - translator_api - INFO - Application startup complete
+2024-12-14 11:12:06,806 - translator_api - INFO - Application startup complete
+2024-12-14 11:15:12,358 - translator_api - INFO - Application startup complete
+2024-12-14 11:15:17,151 - translator_api - INFO - Application startup complete
+2024-12-14 11:16:42,746 - translator_api - INFO - Application startup complete
+2024-12-14 11:17:32,933 - translator_api - INFO - Application startup complete
+2024-12-14 11:17:37,726 - translator_api - INFO - Application startup complete
+2024-12-14 11:18:01,867 - translator_api - INFO - Application startup complete
+2024-12-14 11:18:06,797 - translator_api - INFO - Application startup complete
+2024-12-14 11:19:00,536 - translator_api - INFO - Application startup complete
+2024-12-14 11:19:05,485 - translator_api - INFO - Application startup complete
+2024-12-14 11:20:38,737 - translator_api - INFO - Application startup complete
+2024-12-14 11:20:43,627 - translator_api - INFO - Application startup complete
+2024-12-14 11:21:27,010 - translator_api - INFO - Application startup complete
+2024-12-14 11:21:31,796 - translator_api - INFO - Application startup complete
+2024-12-14 11:22:14,063 - translator_api - INFO - Application startup complete
+2024-12-14 11:22:19,024 - translator_api - INFO - Application startup complete
+2024-12-14 11:24:05,990 - translator_api - INFO - Application startup complete
+2024-12-14 11:24:10,599 - translator_api - INFO - Application startup complete
+2024-12-14 11:24:45,032 - translator_api - INFO - Application startup complete
+2024-12-14 11:24:49,656 - translator_api - INFO - Application startup complete
+2024-12-14 16:00:50,183 - translator_api - INFO - Application startup complete
+2024-12-14 16:00:54,490 - translator_api - INFO - Application startup complete
+2024-12-14 16:01:35,918 - translator_api - INFO - Application startup complete
+2024-12-14 16:01:39,950 - translator_api - INFO - Application startup complete
+2024-12-14 16:04:18,360 - translator_api - INFO - Application startup complete
+2024-12-14 16:04:22,525 - translator_api - INFO - Application startup complete
+2024-12-14 16:04:23,567 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-14 16:04:53,564 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:04:53,564 - translator_api - INFO - Client disconnected. Total connections: 0
+2024-12-14 16:04:54,568 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-14 16:05:23,571 - translator_api - INFO - Client connected. Total connections: 2
+2024-12-14 16:05:53,593 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:05:53,593 - translator_api - INFO - Client disconnected. Total connections: 1
+2024-12-14 16:05:54,598 - translator_api - INFO - Client connected. Total connections: 2
+2024-12-14 16:06:23,604 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:06:53,610 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:06:53,610 - translator_api - INFO - Client disconnected. Total connections: 2
+2024-12-14 16:06:54,612 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:07:23,621 - translator_api - ERROR - WebSocket error: 1005
+2024-12-14 16:07:23,621 - translator_api - INFO - Client disconnected. Total connections: 2
+2024-12-14 16:07:24,613 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:09:29,599 - translator_api - INFO - Application startup complete
+2024-12-14 16:09:34,069 - translator_api - INFO - Application startup complete
+2024-12-14 16:09:35,096 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-14 16:10:05,107 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:10:05,107 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:10:05,107 - translator_api - INFO - Client disconnected. Total connections: 0
+2024-12-14 16:10:06,120 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-14 16:10:35,117 - translator_api - INFO - Client connected. Total connections: 2
+2024-12-14 16:10:35,133 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:10:35,133 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:10:35,134 - translator_api - INFO - Client disconnected. Total connections: 1
+2024-12-14 16:10:36,140 - translator_api - INFO - Client connected. Total connections: 2
+2024-12-14 16:11:05,142 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:11:35,146 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:11:35,146 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:11:35,146 - translator_api - INFO - Client disconnected. Total connections: 2
+2024-12-14 16:11:36,157 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:12:05,160 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 16:12:05,160 - translator_api - ERROR - WebSocket error: received 1005 (no status received [internal]); then sent 1005 (no status received [internal])
+2024-12-14 16:12:05,160 - translator_api - INFO - Client disconnected. Total connections: 2
+2024-12-14 16:12:06,164 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-14 16:15:46,584 - translator_api - INFO - Application startup complete
+2024-12-14 16:15:50,772 - translator_api - INFO - Application startup complete
+2024-12-14 16:23:28,045 - translator_api - INFO - Application startup complete
+2024-12-14 16:28:09,258 - translator_api - INFO - Application startup complete
+2024-12-14 16:31:07,250 - translator_api - INFO - Application startup complete
+2024-12-14 16:33:59,151 - translator_api - INFO - Application startup complete
+2024-12-14 17:38:50,605 - translator_api - INFO - Application startup complete
+2024-12-14 17:49:51,748 - translator_api - INFO - Application startup complete
+2024-12-14 17:50:20,941 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-14 17:50:25,943 - translator_api - ERROR - Error processing message: 1005
+2024-12-14 17:50:25,943 - translator_api - INFO - Client disconnected. Total connections: 0
+2024-12-14 17:50:35,493 - translator_api - INFO - Application startup complete
+2024-12-14 17:52:24,814 - translator_api - INFO - Application startup complete
+2024-12-14 17:52:39,666 - translator_api - INFO - Application startup complete

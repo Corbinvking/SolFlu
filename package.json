@@ -6,6 +6,9 @@
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:integration": "node scripts/run-integration-tests.js",
+    "test:stability": "cross-env NODE_ENV=integration jest tests/integration/connection-stability.test.js --verbose",
+    "monitor:websocket": "node scripts/monitor-websocket.js",
     "start": "webpack serve --mode development",
     "build": "webpack --mode production"
   },
@@ -15,15 +18,19 @@
     "@deck.gl/layers": "^8.9.0",
     "@deck.gl/react": "^8.9.0",
     "events": "^3.3.0",
+    "lodash": "^4.17.21",
     "mapbox-gl": "^2.15.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-map-gl": "^7.1.0"
+    "react-map-gl": "^7.1.0",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "@babel/core": "^7.15.0",
+    "@babel/plugin-transform-runtime": "^7.25.9",
     "@babel/preset-env": "^7.15.0",
     "@babel/preset-react": "^7.14.5",
+    "@babel/runtime": "^7.26.0",
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^12.0.0",
     "assert": "^2.0.0",
@@ -35,8 +42,11 @@
     "css-loader": "^6.2.0",
     "dotenv": "^16.4.7",
     "dotenv-webpack": "^8.0.1",
+    "html-webpack-plugin": "^5.6.3",
     "https-browserify": "^1.0.0",
     "jest": "^27.0.6",
+    "jest-websocket-mock": "^2.5.0",
+    "mock-socket": "^9.3.1",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
@@ -46,15 +56,5 @@
     "webpack": "^5.50.0",
     "webpack-cli": "^4.8.0",
     "webpack-dev-server": "^4.0.0"
-  },
-  "jest": {
-    "testEnvironment": "jsdom",
-    "moduleNameMapper": {
-      "\\.(css|less|sass|scss)$": "<rootDir>/__mocks__/styleMock.js",
-      "\\.(gif|ttf|eot|svg)$": "<rootDir>/__mocks__/fileMock.js"
-    },
-    "setupFilesAfterEnv": [
-      "<rootDir>/jest.setup.js"
-    ]
   }
 }

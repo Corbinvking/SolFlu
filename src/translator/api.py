@@ -1,11 +1,17 @@
-from fastapi import FastAPI, HTTPException
+import sys
+import os
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
 from typing import Dict, Optional
 import time
 from functools import lru_cache
 import hashlib
 import json
-from starlette.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +19,9 @@ import logging
 import logging.handlers
 import os
 from datetime import datetime
+import uvicorn
+from translator.models import MarketMetrics, SimulationParameters
+from translator.websocket_server import websocket_endpoint, cleanup_task, active_connections
 
 # Configure logging
 log_directory = "logs"
@@ -40,6 +49,15 @@ performance_handler = logging.handlers.RotatingFileHandler(
     backupCount=5
 )
 
+# Add console handler for startup logging
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
+
 # Create formatters
 main_formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -62,19 +80,6 @@ performance_handler.setLevel(logging.INFO)
 logger.addHandler(main_handler)
 logger.addHandler(error_handler)
 logger.addHandler(performance_handler)
-
-class MarketMetrics(BaseModel):
-    price: float
-    volume_24h: float
-    price_change_24h: float
-    market_cap: float
-    timestamp: float
-
-class SimulationParameters(BaseModel):
-    infection_rate: float
-    mutation_rate: float
-    transmission_speed: float
-    cure_progress: float
 
 class Translator:
     def __init__(self):
@@ -269,4 +274,38 @@ async def get_metrics():
     return {
         "cache_stats": translator.get_cache_stats(),
         "uptime": time.time()
-    } 
+    }
+
+# Add WebSocket endpoint
+app.add_api_websocket_route("/translator", websocket_endpoint)
+
+@app.on_event("startup")
+async def startup_event():
+    # Start the cleanup task in the background
+    asyncio.create_task(cleanup_task())
+    logger.info("Application startup complete")
+
+if __name__ == "__main__":
+    port = 8006
+    max_retries = 3
+    
+    for retry in range(max_retries):
+        try:
+            uvicorn.run(
+                "api:app",
+                host="127.0.0.1",  # Explicitly use IPv4
+                port=port + retry,
+                reload=True,
+                log_level="info",
+                access_log=True,
+                ws_ping_interval=None,  # Disable WebSocket ping to avoid conflicts
+                ws_ping_timeout=None,
+                workers=1  # Ensure single worker to avoid port conflicts
+            )
+            break
+        except Exception as e:
+            if retry < max_retries - 1:
+                logger.warning(f"Port {port + retry} is in use, trying next port...")
+            else:
+                logger.error(f"Failed to bind to any ports in range {port}-{port + retry}")
+                raise
