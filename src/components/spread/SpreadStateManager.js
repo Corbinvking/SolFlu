@@ -1,138 +1,285 @@
+import { UpdateQueue, SpreadMechanism } from './spread-components';
+import SpreadVisualizationBridge from '../../integration/spread-visualization-bridge';
+import SIRModelIntegration from '../../models/SIRModelIntegration';
+import MutationSystem from '../../models/MutationSystem';
+
 const HIGH_VOLATILITY_THRESHOLD = 0.75;
-
-class UpdateQueue {
-    constructor() {
-        this.queue = [];
-        this.processing = false;
-        this.frameRate = 60;
-        this.frameTime = 1000 / this.frameRate;
-    }
-
-    addUpdate(update) {
-        this.queue.push(update);
-        if (!this.processing) {
-            this.processQueue();
-        }
-    }
-
-    async processQueue() {
-        this.processing = true;
-        const startTime = performance.now();
-
-        while (this.queue.length > 0) {
-            const update = this.queue.shift();
-            await this.applyUpdate(update);
-
-            // Maintain frame rate
-            const elapsedTime = performance.now() - startTime;
-            const remainingTime = this.frameTime - (elapsedTime % this.frameTime);
-            if (remainingTime > 0) {
-                await new Promise(resolve => setTimeout(resolve, remainingTime));
-            }
-        }
-
-        this.processing = false;
-    }
-
-    async applyUpdate(update) {
-        try {
-            switch (update.type) {
-                case 'spread':
-                    await this.handleSpreadUpdate(update.data);
-                    break;
-                case 'route':
-                    await this.handleRouteUpdate(update.data);
-                    break;
-                default:
-                    console.warn('Unknown update type:', update.type);
-            }
-        } catch (error) {
-            console.error('Error applying update:', error);
-        }
-    }
-
-    async handleSpreadUpdate(data) {
-        // Implementation will be connected to visualization layer
-        console.log('Handling spread update:', data);
-    }
-
-    async handleRouteUpdate(data) {
-        // Implementation will be connected to visualization layer
-        console.log('Handling route update:', data);
-    }
-}
-
-class SpreadMechanism {
-    constructor() {
-        this.lastUpdate = performance.now();
-    }
-
-    update(marketData) {
-        const now = performance.now();
-        const deltaTime = now - this.lastUpdate;
-        this.lastUpdate = now;
-
-        return {
-            spreadRate: this.calculateSpreadRate(marketData, deltaTime),
-            intensity: this.calculateIntensity(marketData),
-            centers: this.updateCenters(marketData)
-        };
-    }
-
-    calculateSpreadRate(marketData, deltaTime) {
-        const baseRate = marketData.marketCap / 1000000; // Normalize market cap
-        const volatilityFactor = 1 + marketData.volatility;
-        return (baseRate * volatilityFactor * deltaTime) / 1000;
-    }
-
-    calculateIntensity(marketData) {
-        return Math.min(1, marketData.volatility);
-    }
-
-    updateCenters(marketData) {
-        return Array.from(marketData.infectionCenters).map(([id, center]) => ({
-            id,
-            ...center,
-            intensity: this.calculateIntensity(marketData)
-        }));
-    }
-}
+const INITIAL_PATTERNS = 2;
+const ADDITIONAL_PATTERNS = 2;
 
 class SpreadStateManager {
-    constructor() {
+    constructor(layerManager) {
         this.spreadMechanics = new SpreadMechanism();
         this.updateQueue = new UpdateQueue();
+        this.visualizationBridge = new SpreadVisualizationBridge(layerManager);
+        this.sirModel = new SIRModelIntegration();
+        this.mutationSystem = new MutationSystem();
+        this.lastMarketData = null;
+        this.lastUpdate = performance.now();
+        this.initialPatternsCreated = 0;
+        this.patternCount = 0;
+        this.activePatterns = new Set();
     }
 
-    processMarketUpdate(marketData) {
-        const spreadUpdates = this.spreadMechanics.update(marketData);
-        
-        this.updateQueue.addUpdate({
-            type: 'spread',
-            data: spreadUpdates,
-            priority: this.calculatePriority(marketData)
-        });
+    async processMarketUpdate(marketData) {
+        const now = performance.now();
+        const deltaTime = (now - this.lastUpdate) / 1000;
+        this.lastUpdate = now;
 
-        // Process route updates if present
-        if (marketData.routes && marketData.routes.size > 0) {
-            this.updateQueue.addUpdate({
-                type: 'route',
+        // Update SIR model with market data
+        this.sirModel.updateParameters(marketData);
+        const sirState = this.sirModel.evolve(deltaTime);
+        const spreadFactors = this.sirModel.getSpreadFactors();
+
+        // Process mutations for active patterns
+        const activePatterns = this.visualizationBridge.getActivePatterns();
+        for (const pattern of activePatterns) {
+            const mutatedPattern = this.mutationSystem.attemptMutation(pattern, marketData);
+            if (mutatedPattern !== pattern) {
+                await this.updateQueue.addUpdate({
+                    type: 'mutation',
+                    data: {
+                        patternId: pattern.id,
+                        changes: mutatedPattern
+                    },
+                    priority: 'high'
+                });
+            }
+        }
+
+        // Determine if we should create new patterns
+        const shouldCreatePatterns = 
+            this.initialPatternsCreated < INITIAL_PATTERNS ||
+            this.shouldCreateNewPattern(marketData, this.lastMarketData);
+
+        const newPatternIds = [];
+        const spreadUpdates = [];
+
+        // Create initial patterns if needed
+        if (this.initialPatternsCreated < INITIAL_PATTERNS) {
+            for (let i = this.initialPatternsCreated; i < INITIAL_PATTERNS; i++) {
+                const patternType = this.determinePatternType(marketData);
+                const position = this.calculateNewPatternPosition(marketData, i);
+                
+                try {
+                    const patternId = await this.visualizationBridge.createSpreadPattern(
+                        patternType, 
+                        position,
+                        spreadFactors
+                    );
+                    
+                    if (patternId) {
+                        await this.updateQueue.addUpdate({
+                            type: 'spread',
+                            data: {
+                                type: 'pattern_created',
+                                patternId,
+                                position
+                            },
+                            priority: 'high'
+                        });
+
+                        newPatternIds.push(patternId);
+                        this.patternCount++;
+                        this.activePatterns.add(patternId);
+                        this.initialPatternsCreated++;
+                    }
+                } catch (error) {
+                    console.error('Error creating initial pattern:', error);
+                }
+            }
+        }
+
+        // Create additional patterns if conditions are met
+        if (shouldCreatePatterns && this.initialPatternsCreated >= INITIAL_PATTERNS) {
+            const basePosition = this.calculateNewPatternPosition(marketData);
+            const createdPatterns = [];
+            
+            for (let i = 0; i < ADDITIONAL_PATTERNS; i++) {
+                const patternType = this.determinePatternType(marketData);
+                const angle = (i / ADDITIONAL_PATTERNS) * Math.PI * 2;
+                const position = this.adjustPositionByAngle(basePosition, angle);
+                
+                try {
+                    const patternId = await this.visualizationBridge.createSpreadPattern(
+                        patternType, 
+                        position,
+                        spreadFactors
+                    );
+                    
+                    if (patternId) {
+                        await this.updateQueue.addUpdate({
+                            type: 'spread',
+                            data: {
+                                type: 'pattern_created',
+                                patternId,
+                                position
+                            },
+                            priority: 'high'
+                        });
+
+                        newPatternIds.push(patternId);
+                        this.patternCount++;
+                        this.activePatterns.add(patternId);
+                        createdPatterns.push({ patternId, position });
+                    }
+                } catch (error) {
+                    console.error('Error creating pattern:', error);
+                }
+            }
+
+            // Retry logic for failed pattern creation
+            if (createdPatterns.length < ADDITIONAL_PATTERNS) {
+                const remainingCount = ADDITIONAL_PATTERNS - createdPatterns.length;
+                for (let i = 0; i < remainingCount; i++) {
+                    const patternType = this.determinePatternType(marketData);
+                    const angle = ((createdPatterns.length + i) / ADDITIONAL_PATTERNS) * Math.PI * 2;
+                    const position = this.adjustPositionByAngle(basePosition, angle);
+                    
+                    try {
+                        const patternId = await this.visualizationBridge.createSpreadPattern(
+                            patternType, 
+                            position,
+                            spreadFactors
+                        );
+                        
+                        if (patternId) {
+                            await this.updateQueue.addUpdate({
+                                type: 'spread',
+                                data: {
+                                    type: 'pattern_created',
+                                    patternId,
+                                    position
+                                },
+                                priority: 'high'
+                            });
+
+                            newPatternIds.push(patternId);
+                            this.patternCount++;
+                            this.activePatterns.add(patternId);
+                            createdPatterns.push({ patternId, position });
+                        }
+                    } catch (error) {
+                        console.error('Error creating additional pattern:', error);
+                    }
+                }
+            }
+        }
+
+        // Update existing patterns with new spread factors
+        const existingPatterns = Array.from(this.activePatterns);
+        for (const patternId of existingPatterns) {
+            await this.updateQueue.addUpdate({
+                type: 'spread',
                 data: {
-                    routes: Array.from(marketData.routes),
-                    volatility: marketData.volatility
+                    type: 'pattern_updated',
+                    patternId,
+                    spreadFactors
                 },
                 priority: 'normal'
             });
         }
+
+        this.lastMarketData = { ...marketData };
+
+        return {
+            newPatternIds,
+            spreadUpdates,
+            sirState,
+            mutations: this.mutationSystem.getActiveMutations()
+        };
+    }
+
+    shouldCreateNewPattern(marketData, previousData) {
+        if (!previousData) return false;
+
+        const volatilityChange = Math.abs(marketData.volatility - previousData.volatility);
+        const significantVolatilityChange = volatilityChange > 0.2;
+        
+        const marketCapChange = Math.abs(
+            (marketData.marketCap - previousData.marketCap) / previousData.marketCap
+        );
+        const significantMarketMove = marketCapChange > 0.1;
+
+        return significantVolatilityChange || significantMarketMove;
+    }
+
+    determinePatternType(marketData) {
+        if (marketData.volatility > HIGH_VOLATILITY_THRESHOLD) {
+            return 'exponential';
+        } else if (marketData.volatility > 0.3) {
+            return 'clustered';
+        } else {
+            return 'linear';
+        }
+    }
+
+    calculateNewPatternPosition(marketData, index = null) {
+        // Calculate base position based on market data
+        const x = (marketData.marketCap / marketData.maxMarketCap) * 2 - 1;
+        const y = marketData.volatility * 2 - 1;
+
+        // If index is provided, distribute initial patterns evenly
+        if (index !== null) {
+            const angle = (index / INITIAL_PATTERNS) * Math.PI * 2;
+            return this.adjustPositionByAngle([x, y], angle);
+        }
+
+        return [x, y];
+    }
+
+    adjustPositionByAngle(basePosition, angle) {
+        const radius = 0.3; // Fixed radius for consistent spacing
+        return [
+            basePosition[0] + Math.cos(angle) * radius,
+            basePosition[1] + Math.sin(angle) * radius
+        ];
     }
 
     calculatePriority(marketData) {
         return marketData.volatility > HIGH_VOLATILITY_THRESHOLD ? 'high' : 'normal';
     }
+
+    update(deltaTime) {
+        const now = performance.now();
+        if (!deltaTime) {
+            deltaTime = (now - this.lastUpdate) / 1000;
+        }
+        this.lastUpdate = now;
+
+        // Update SIR model
+        if (this.lastMarketData) {
+            this.sirModel.evolve(deltaTime);
+        }
+
+        // Update visualization
+        const updatedPatterns = this.visualizationBridge.update(deltaTime);
+        
+        // Remove terminated patterns
+        const terminatedPatterns = Array.from(this.activePatterns).filter(id => 
+            !updatedPatterns.includes(id)
+        );
+        terminatedPatterns.forEach(id => {
+            this.activePatterns.delete(id);
+            this.patternCount--;
+        });
+
+        // Cleanup old mutations
+        this.mutationSystem.cleanup();
+
+        return updatedPatterns;
+    }
+
+    cleanup() {
+        this.updateQueue.clear();
+        this.visualizationBridge.cleanup();
+        this.sirModel.reset();
+        this.mutationSystem.cleanup();
+        this.lastMarketData = null;
+        this.initialPatternsCreated = 0;
+        this.patternCount = 0;
+        this.activePatterns.clear();
+    }
 }
 
-module.exports = {
-    SpreadStateManager,
-    UpdateQueue,
-    SpreadMechanism
-}; 
+export default SpreadStateManager; 

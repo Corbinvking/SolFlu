@@ -325,3 +325,18 @@
 2024-12-15 15:05:16,899 - translator_api - INFO - Client disconnected. Total connections: 1
 2024-12-15 15:05:16,900 - translator_api - ERROR - Error processing message: 1000
 2024-12-15 15:05:16,901 - translator_api - INFO - Client disconnected. Total connections: 0
+2024-12-15 16:43:28,415 - translator_api - INFO - New WebSocket connection request received
+2024-12-15 16:43:28,416 - translator_api - INFO - WebSocket connection accepted
+2024-12-15 16:43:28,416 - translator_api - INFO - Client connected. Total connections: 1
+2024-12-15 16:43:28,422 - translator_api - INFO - New WebSocket connection request received
+2024-12-15 16:43:28,423 - translator_api - INFO - WebSocket connection accepted
+2024-12-15 16:43:28,423 - translator_api - INFO - Client connected. Total connections: 2
+2024-12-15 16:43:28,423 - translator_api - INFO - New WebSocket connection request received
+2024-12-15 16:43:28,424 - translator_api - INFO - WebSocket connection accepted
+2024-12-15 16:43:28,424 - translator_api - INFO - Client connected. Total connections: 3
+2024-12-15 16:43:29,366 - translator_api - ERROR - Error processing message: 1000
+2024-12-15 16:43:29,366 - translator_api - INFO - Client disconnected. Total connections: 2
+2024-12-15 16:43:29,367 - translator_api - ERROR - Error processing message: 1000
+2024-12-15 16:43:29,367 - translator_api - INFO - Client disconnected. Total connections: 1
+2024-12-15 16:43:29,369 - translator_api - ERROR - Error processing message: 1000
+2024-12-15 16:43:29,369 - translator_api - INFO - Client disconnected. Total connections: 0

@@ -3,8 +3,8 @@
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import VisualizationTest from './components/VisualizationTest';
+import SpreadVisualizationTest from './components/SpreadVisualizationTest';
 
 const container = document.getElementById('root');
 const root = createRoot(container);
-root.render(<VisualizationTest />);
+root.render(<SpreadVisualizationTest />);
