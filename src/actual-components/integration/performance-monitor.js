@@ -85,6 +85,20 @@ class PerformanceMonitor {
         this.metrics.queueSize = 0;
         this.metrics.lastUpdate = Date.now();
     }
+
+    getLastUpdateDuration() {
+        const frameTimeSamples = this.metrics.frameTime;
+        return frameTimeSamples.length > 0 ? frameTimeSamples[frameTimeSamples.length - 1] : 0;
+    }
+
+    getAverageUpdateDuration() {
+        return this.getAverageMetric('frameTime');
+    }
+
+    getPeakUpdateDuration() {
+        const frameTimeSamples = this.metrics.frameTime;
+        return frameTimeSamples.length > 0 ? Math.max(...frameTimeSamples) : 0;
+    }
 }
 
 export default PerformanceMonitor; 

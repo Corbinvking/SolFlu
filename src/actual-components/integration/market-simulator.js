@@ -284,153 +284,69 @@ class OrderBook {
 
 class MarketSimulator {
     constructor() {
-        this.orderBook = new OrderBook(0.03);
+        this.orderBook = new OrderBook();
         this.running = false;
-        this.lastWhaleEvent = Date.now();
-        this.whaleEventInterval = 300000;
-        this.whaleEventVariance = 600000;
-        this.volatilityMultiplier = 1.0;
-        this.volatilityTimeout = null;
-        this.lastOrderTime = Date.now();
-        this.orderGenerationRate = 16; // Increased frequency to ~60fps
+        this.lastUpdate = Date.now();
+        this.updateInterval = 100; // Update every 100ms
         this.performanceMonitor = new PerformanceMonitor();
         this.messageQueue = new MessageQueue();
         
-        // Set up message handlers
-        this.messageQueue.subscribe('order', this.handleOrderMessage.bind(this));
-        this.messageQueue.subscribe('whale', this.handleWhaleMessage.bind(this));
-        this.messageQueue.subscribe('cleanup', this.handleCleanupMessage.bind(this));
-    }
-
-    handleOrderMessage(orderData) {
-        return Promise.resolve(
-            this.performanceMonitor.measureOperation(
-                () => this.orderBook.generateRandomOrder(),
-                'orderProcessing'
-            )
-        ).then(result => {
-            console.log('Order processed:', {
-                buyLevels: this.orderBook.buyLevels.size,
-                sellLevels: this.orderBook.sellLevels.size,
-                marketCap: this.orderBook.calculateMarketCap(),
-                queueSize: this.messageQueue.getMetrics().queueLength
-            });
-            return result;
-        });
-    }
-
-    handleWhaleMessage(whaleData) {
-        return Promise.resolve(
-            this.performanceMonitor.measureOperation(
-                () => this.orderBook.generateWhaleOrder(),
-                'orderProcessing'
-            )
-        );
-    }
-
-    handleCleanupMessage() {
-        return Promise.resolve(
-            this.performanceMonitor.measureOperation(
-                () => {
-                    this.cleanupOldOrders();
-                    this.updateOrderAges();
-                },
-                'stateUpdates'
-            )
-        );
+        // Initialize with some orders
+        for (let i = 0; i < 20; i++) {
+            this.orderBook.generateRandomOrder();
+        }
     }
 
     start() {
         if (this.running) return;
         this.running = true;
-
-        // Generate initial orders
-        for (let i = 0; i < 50; i++) {
-            this.messageQueue.enqueue('order', {}, 2);
-        }
-
-        // Continuous order generation using requestAnimationFrame
-        const generateOrders = () => {
-            if (!this.running) return;
-
-            const frameStart = performance.now();
-            const now = Date.now();
-            const timeSinceLastOrder = now - this.lastOrderTime;
-
-            // Generate orders based on time elapsed
-            if (timeSinceLastOrder >= this.orderGenerationRate) {
-                const ordersToGenerate = Math.floor(Math.random() * 3) + 1;
-                for (let i = 0; i < ordersToGenerate; i++) {
-                    this.messageQueue.enqueue('order', {}, 2);
-                }
-                this.lastOrderTime = now;
-            }
-
-            // Check for whale events
-            if (now - this.lastWhaleEvent > this.whaleEventInterval) {
-                if (Math.random() < 0.4) {
-                    this.messageQueue.enqueue('whale', {}, 3);
-                    this.lastWhaleEvent = now;
-                    this.whaleEventInterval = 300000 + (Math.random() * this.whaleEventVariance - this.whaleEventVariance/2);
-                }
-            }
-
-            // Queue cleanup operations
-            this.messageQueue.enqueue('cleanup', {}, 1);
-
-            // Measure frame time
-            const frameDuration = performance.now() - frameStart;
-            this.performanceMonitor.addMetric('frameTime', frameDuration);
-
-            // Continue the animation loop
-            requestAnimationFrame(generateOrders);
-        };
-
-        // Start the animation loop
-        requestAnimationFrame(generateOrders);
-    }
-
-    getPerformanceMetrics() {
-        return this.performanceMonitor.getMetricsSummary();
-    }
-
-    enablePerformanceDebug() {
-        this.performanceMonitor.enableDebug();
-    }
-
-    disablePerformanceDebug() {
-        this.performanceMonitor.disableDebug();
-    }
-
-    cleanupOldOrders() {
-        const now = Date.now();
-        const maxAge = 60000; // 1 minute max age for orders
-
-        const cleanupLevel = (level) => {
-            Array.from(level.orders.entries()).forEach(([makerId, order]) => {
-                if (now - order.timestamp > maxAge) {
-                    level.removeOrder(makerId);
-                }
-            });
-        };
-
-        // Cleanup old orders from both buy and sell sides
-        this.orderBook.buyLevels.forEach(cleanupLevel);
-        this.orderBook.sellLevels.forEach(cleanupLevel);
+        this.update();
     }
 
     stop() {
         this.running = false;
     }
 
-    updateOrderAges() {
-        // Update ages for all orders
-        const updateLevelOrders = (level) => {
-            level.orders.forEach(order => order.updateAge());
-        };
+    update() {
+        if (!this.running) return;
 
-        this.orderBook.buyLevels.forEach(updateLevelOrders);
-        this.orderBook.sellLevels.forEach(updateLevelOrders);
+        const now = Date.now();
+        const deltaTime = now - this.lastUpdate;
+
+        if (deltaTime >= this.updateInterval) {
+            // Generate new orders
+            const orderCount = Math.floor(Math.random() * 3) + 1; // 1-3 orders per update
+            for (let i = 0; i < orderCount; i++) {
+                if (Math.random() < 0.1) { // 10% chance for whale order
+                    this.orderBook.generateWhaleOrder();
+                } else {
+                    this.orderBook.generateRandomOrder();
+                }
+            }
+
+            // Remove some old orders
+            this.cleanupOldOrders();
+            this.lastUpdate = now;
+        }
+
+        // Schedule next update
+        requestAnimationFrame(() => this.update());
+    }
+
+    cleanupOldOrders() {
+        const state = this.orderBook.getMarketState();
+        const now = Date.now();
+        const maxAge = 30000; // 30 seconds
+
+        [...state.buyOrders, ...state.sellOrders].forEach(order => {
+            if (now - order.timestamp > maxAge) {
+                this.orderBook.removeOrder(order.makerId, order.price, order.side);
+            }
+        });
+    }
+
+    getMarketState() {
+        return this.orderBook.getMarketState();
     }
 
     subscribe(callback) {
@@ -441,49 +357,45 @@ class MarketSimulator {
         this.orderBook.unsubscribe(callback);
     }
 
-    injectVolatility(multiplier) {
-        // Clear any existing timeout
-        if (this.volatilityTimeout) {
-            clearTimeout(this.volatilityTimeout);
-        }
-
-        // Store the original multiplier if not already modified
-        const originalMultiplier = this.volatilityMultiplier;
-        this.volatilityMultiplier = multiplier;
-
-        // Generate some immediate volatile orders
-        for (let i = 0; i < 5; i++) {
-            this.orderBook.generateWhaleOrder();
-        }
-
-        // Reset after 5 seconds
-        this.volatilityTimeout = setTimeout(() => {
-            this.volatilityMultiplier = originalMultiplier;
-        }, 5000);
-    }
-
     reset() {
-        // Stop current simulation
         this.stop();
-        
-        // Create new order book with initial price
-        this.orderBook = new OrderBook(0.03);
-        
-        // Reset volatility state
-        this.volatilityMultiplier = 1.0;
-        if (this.volatilityTimeout) {
-            clearTimeout(this.volatilityTimeout);
-        }
-        
-        // Reset whale event timing
-        this.lastWhaleEvent = Date.now();
-        
-        // Restart simulation
+        this.orderBook = new OrderBook();
         this.start();
     }
 
-    getMarketState() {
-        return this.orderBook.getMarketState();
+    injectVolatility(multiplier) {
+        // Generate multiple whale orders to create volatility
+        for (let i = 0; i < 5; i++) {
+            this.orderBook.generateWhaleOrder();
+        }
+    }
+
+    getPerformanceMetrics() {
+        return {
+            orderCount: this.orderBook.buyLevels.size + this.orderBook.sellLevels.size,
+            updateRate: 1000 / this.updateInterval,
+            marketCap: this.orderBook.calculateMarketCap(),
+            volatility: this.orderBook.calculateVolatility(),
+            messageQueueSize: this.messageQueue.size(),
+            lastUpdateDuration: this.performanceMonitor.getLastUpdateDuration(),
+            averageUpdateDuration: this.performanceMonitor.getAverageUpdateDuration(),
+            peakUpdateDuration: this.performanceMonitor.getPeakUpdateDuration()
+        };
+    }
+
+    enablePerformanceDebug() {
+        this.performanceMonitor.enableDebug();
+        console.log('Performance debugging enabled');
+    }
+
+    disablePerformanceDebug() {
+        this.performanceMonitor.disableDebug();
+        console.log('Performance debugging disabled');
+    }
+
+    notifySubscribers() {
+        const state = this.getMarketState();
+        this.messageQueue.enqueue('marketUpdate', state, 2); // High priority for market updates
     }
 }
 

@@ -111,6 +111,10 @@ class MessageQueue {
         }
         this.processing = false;
     }
+
+    size() {
+        return this.queue.length;
+    }
 }
 
 export default MessageQueue; 

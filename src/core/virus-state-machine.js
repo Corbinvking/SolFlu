@@ -4,6 +4,7 @@ class VirusPoint {
         this.intensity = intensity;
         this.age = 0;
         this.active = true;
+        this.colorIntensity = intensity;
     }
 }
 
@@ -22,8 +23,10 @@ class VirusStateMachine {
     }
 
     initialize(center, params) {
+        console.log('Initializing virus at center:', center);
         this.center = center;
         this.params = { ...this.params, ...params };
+        // Create initial point with position in [longitude, latitude] format
         this.points = [new VirusPoint(center, 1.0)];
     }
 
@@ -82,9 +85,11 @@ class VirusStateMachine {
     }
 
     getPoints() {
+        // Return points in the format expected by DeckGL ScatterplotLayer
         return this.points.map(p => ({
-            position: p.position,
-            intensity: p.intensity
+            position: p.position, // Already in [longitude, latitude] format
+            colorIntensity: p.intensity,
+            radius: 3
         }));
     }
 
@@ -105,6 +110,18 @@ class VirusStateMachine {
             default:
                 this.spreadRadius = 0.01;
         }
+    }
+
+    boostSpread(multiplier) {
+        this.params.speed *= multiplier;
+        this.params.intensity *= multiplier;
+        console.log('Boosted virus spread:', this.params);
+    }
+
+    suppressSpread(multiplier) {
+        this.params.speed *= multiplier;
+        this.params.intensity *= multiplier;
+        console.log('Suppressed virus spread:', this.params);
     }
 }
 

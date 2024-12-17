@@ -29,106 +29,75 @@ const OrderRow = ({ order, type }) => {
 const OrderBookDisplay = ({ marketState }) => {
     if (!marketState) return null;
 
-    const {
-        buyOrders,
-        sellOrders,
-        currentPrice,
-        marketCap,
-        volatility
-    } = marketState;
+    const { buyOrders = [], sellOrders = [], marketCap = 0, volatility = 0, currentPrice = 0 } = marketState;
 
-    const containerStyle = {
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        width: '220px',
-        backgroundColor: 'rgba(17, 19, 23, 0.95)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '4px',
-        color: 'white',
-        zIndex: 1000,
-        maxHeight: '70vh',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-    };
-
-    const headerStyle = {
-        padding: '6px 8px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '11px',
-        backgroundColor: 'rgba(255,255,255,0.05)'
-    };
-
-    const scrollContainerStyle = {
-        overflowY: 'auto',
-        maxHeight: 'calc(70vh - 70px)',
-        scrollbarWidth: 'thin',
-        scrollbarColor: 'rgba(255,255,255,0.3) transparent',
-        backgroundColor: 'rgba(0,0,0,0.2)'
-    };
-
-    const currentPriceStyle = {
-        padding: '4px',
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        textAlign: 'center',
-        fontSize: '12px',
-        fontWeight: 'bold',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        color: '#fff'
-    };
-
-    const columnHeaderStyle = {
-        display: 'flex',
-        justifyContent: 'space-between',
-        padding: '2px 6px',
-        fontSize: '9px',
-        color: '#888',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        backgroundColor: 'rgba(255,255,255,0.02)'
-    };
+    // Take 10 orders from each side centered around the current price
+    const visibleBuyOrders = buyOrders.slice(0, 10);
+    const visibleSellOrders = sellOrders.slice(0, 10);
 
     return (
-        <div style={containerStyle}>
-            <div style={headerStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span>Market Cap:</span>
-                    <span>${Math.round(marketCap).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Volatility:</span>
-                    <span>{(volatility * 100).toFixed(1)}%</span>
-                </div>
-            </div>
+        <div style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            background: 'rgba(0, 0, 0, 0.8)',
+            padding: 20,
+            borderRadius: 8,
+            color: 'white',
+            width: 300,
+            fontFamily: 'monospace',
+            zIndex: 1000
+        }}>
+            <h3 style={{ margin: '0 0 15px 0' }}>Order Book</h3>
             
-            <div style={columnHeaderStyle}>
-                <span style={{ width: '25px' }}>TIME</span>
-                <span style={{ width: '50px', textAlign: 'right' }}>SIZE</span>
-                <span style={{ width: '70px', textAlign: 'right' }}>PRICE</span>
-                <span style={{ width: '45px' }}>ID</span>
+            {/* Market Info */}
+            <div style={{ marginBottom: 15 }}>
+                <div>Market Cap: ${marketCap.toLocaleString()}</div>
+                <div>Volatility: {(volatility * 100).toFixed(1)}%</div>
+                <div>Current Price: ${currentPrice.toFixed(4)}</div>
             </div>
-            
-            <div style={scrollContainerStyle}>
-                {/* Sell Orders */}
-                <div>
-                    {sellOrders.slice(0, 15).map((order, i) => (
-                        <OrderRow key={order.makerId} order={order} type="sell" />
-                    ))}
-                </div>
 
-                {/* Current Price */}
-                <div style={currentPriceStyle}>
-                    ${currentPrice.toFixed(4)}
-                </div>
+            {/* Headers */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '1px 6px',
+                borderBottom: '1px solid rgba(255,255,255,0.2)',
+                marginBottom: '5px',
+                fontSize: '10px',
+                color: '#888'
+            }}>
+                <span style={{ width: '25px' }}>Age</span>
+                <span style={{ width: '50px', textAlign: 'right' }}>Amount</span>
+                <span style={{ width: '70px', textAlign: 'right' }}>Price</span>
+                <span style={{ width: '45px', textAlign: 'left' }}>ID</span>
+            </div>
 
-                {/* Buy Orders */}
-                <div>
-                    {buyOrders.slice(0, 15).map((order, i) => (
-                        <OrderRow key={order.makerId} order={order} type="buy" />
-                    ))}
-                </div>
+            {/* Sell Orders (reversed to show highest price first) */}
+            <div style={{ marginBottom: '10px' }}>
+                {visibleSellOrders.map((order, i) => (
+                    <OrderRow key={`sell-${order.makerId}`} order={order} type="sell" />
+                ))}
+            </div>
+
+            {/* Spread Indicator */}
+            <div style={{
+                padding: '5px',
+                textAlign: 'center',
+                borderTop: '1px solid rgba(255,255,255,0.1)',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                margin: '5px 0',
+                fontSize: '11px',
+                color: '#888'
+            }}>
+                Spread: ${((visibleSellOrders[0]?.price || 0) - (visibleBuyOrders[0]?.price || 0)).toFixed(4)}
+            </div>
+
+            {/* Buy Orders */}
+            <div>
+                {visibleBuyOrders.map((order, i) => (
+                    <OrderRow key={`buy-${order.makerId}`} order={order} type="buy" />
+                ))}
             </div>
         </div>
     );

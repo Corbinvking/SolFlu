@@ -101,8 +101,9 @@ class VirusStateMachine {
         this.maxPoints = 2000;
         this.baseSpreadRadius = 0.02;
         this.lastGrowthTime = Date.now();
-        this.growthInterval = 16;
+        this.growthInterval = 100;
         this.growthTimeout = null;
+        this.debugMode = true;
 
         // Initialize subsystems
         this.mutationSystem = new MutationSystem();
@@ -136,35 +137,47 @@ class VirusStateMachine {
     }
 
     initialize(center, params) {
-        console.log('Initializing virus with center:', center);
-        this.center = center;
-        this.params = { ...this.params, ...params };
+        console.log('Initializing virus at center:', center, 'with params:', params);
         
-        // Create initial cluster of points
-        const initialPoint = new VirusPoint(center, 1.0, this.params.colorIntensity);
+        // Create initial infection point
+        const initialPoint = new VirusPoint(center, 1.0, 1.0);
         this.points = [initialPoint];
+        this.territory = new Territory(0.005);
         this.territory.addPoint(initialPoint);
 
-        // Add a few points around the center
-        for (let i = 0; i < 4; i++) {
-            const angle = (i / 4) * Math.PI * 2;
-            const offset = this.territory.gridSize;
-            const position = [
-                center[0] + Math.cos(angle) * offset,
-                center[1] + Math.sin(angle) * offset
+        // Add some surrounding points for better visibility
+        const radius = 0.01;  // Smaller initial radius
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const offset = [
+                Math.cos(angle) * radius,
+                Math.sin(angle) * radius
             ];
-            const point = new VirusPoint(position, 1.0, this.params.colorIntensity);
+            const position = [center[0] + offset[0], center[1] + offset[1]];
+            const point = new VirusPoint(position, 0.8, 1.0);
             this.points.push(point);
             this.territory.addPoint(point);
         }
 
-        console.log('Initial points created:', this.points.length);
+        console.log('Initial virus points created:', this.points.length);
+        
+        this.params = { ...this.params, ...params };
+        this.active = true;
+        this.lastGrowthTime = Date.now();
     }
 
     update(deltaTime) {
+        if (this.debugMode) {
+            console.log('Virus Update:', {
+                deltaTime,
+                currentPoints: this.points.length,
+                timeSinceLastGrowth: Date.now() - this.lastGrowthTime
+            });
+        }
+
         // Update color intensities based on volatility
         this.points.forEach(point => {
-            point.colorIntensity = this.params.colorIntensity;
+            point.colorIntensity = Math.min(1.0, this.params.colorIntensity * 2);
         });
 
         const now = Date.now();
@@ -180,16 +193,14 @@ class VirusStateMachine {
         const baseTargetCoverage = Math.max(20, Math.floor(scaledMarketCap));
         const targetCoverage = Math.floor(baseTargetCoverage * this.params.growthMultiplier);
 
-        console.log('Virus Growth Check:', {
-            currentMarketCap: this.params.marketCap,
-            scaledMarketCap,
-            baseTargetCoverage,
-            targetCoverage,
-            growthMultiplier: this.params.growthMultiplier,
-            currentCoverage: this.territory.coverage,
-            currentPoints: this.points.length,
-            edgePoints: this.territory.edges.size
-        });
+        if (this.debugMode) {
+            console.log('Growth Check:', {
+                currentCoverage: this.territory.coverage,
+                targetCoverage,
+                growthMultiplier: this.params.growthMultiplier,
+                edgePoints: this.territory.edges.size
+            });
+        }
 
         if (this.territory.coverage < targetCoverage) {
             // Get all edge points for potential growth
@@ -197,15 +208,13 @@ class VirusStateMachine {
                 .map(key => this.territory.points.get(key))
                 .filter(point => point.isEdge);
 
+            // Ensure we have at least some growth
+            const minGrowthPoints = Math.max(1, Math.floor(edgePoints.length * 0.1));
             let growthCount = 0;
-            // Dynamic growth probability based on how far we are from target
-            const coverageRatio = this.territory.coverage / targetCoverage;
-            const baseGrowthProbability = 0.3 * (1 - coverageRatio);
-            const adjustedProbability = baseGrowthProbability * this.params.growthMultiplier;
 
-            // Try to grow from each edge point with dynamic probability
+            // Try to grow from each edge point
             edgePoints.forEach(point => {
-                if (Math.random() < adjustedProbability) {
+                if (growthCount < minGrowthPoints || Math.random() < 0.3 * this.params.growthMultiplier) {
                     const availablePositions = this.territory.getNeighborPositions(point.position);
                     if (availablePositions.length > 0) {
                         const newPosition = availablePositions[Math.floor(Math.random() * availablePositions.length)];
@@ -217,50 +226,29 @@ class VirusStateMachine {
                 }
             });
 
-            console.log('Growth Result:', {
-                attemptedFrom: edgePoints.length,
-                newPointsAdded: growthCount,
-                totalPoints: this.points.length,
-                coverageRatio,
-                baseGrowthProbability,
-                adjustedProbability
-            });
-        } else if (this.territory.coverage > targetCoverage) {
-            // Remove points from the edges when shrinking
-            const edgePoints = Array.from(this.territory.edges)
-                .map(key => this.territory.points.get(key))
-                .filter(point => point.isEdge);
-
-            // More gradual shrinking based on how far we are over target
-            const shrinkRatio = (this.territory.coverage - targetCoverage) / targetCoverage;
-            const pointsToRemove = Math.min(
-                10,
-                Math.floor(edgePoints.length * shrinkRatio * 0.1)
-            );
-
-            for (let i = 0; i < pointsToRemove && edgePoints.length > 0; i++) {
-                const pointToRemove = edgePoints[Math.floor(Math.random() * edgePoints.length)];
-                this.territory.removePoint(pointToRemove.position);
-                this.points = this.points.filter(p => p !== pointToRemove);
+            if (this.debugMode) {
+                console.log('Growth Result:', {
+                    newPointsAdded: growthCount,
+                    totalPoints: this.points.length
+                });
             }
-
-            console.log('Shrink Result:', {
-                shrinkRatio,
-                pointsRemoved: pointsToRemove,
-                remainingPoints: this.points.length
-            });
         }
     }
 
     getPoints() {
-        return this.points.map(p => ({
-            position: p.position,
-            colorIntensity: p.colorIntensity
+        // Ensure we return points in the correct format for the ScatterplotLayer
+        return this.points.map(point => ({
+            position: Array.isArray(point.position) ? point.position : point,
+            colorIntensity: point.colorIntensity || 1.0,
+            radius: 10 * (point.intensity || 1.0)
         }));
     }
 
     updateParams(params) {
         this.params = { ...this.params, ...params };
+        if (this.debugMode) {
+            console.log('Updated params:', this.params);
+        }
     }
 }
 

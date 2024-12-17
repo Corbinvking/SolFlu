@@ -42,7 +42,8 @@ const MetricRow = styled.div`
 
 const ButtonContainer = styled.div`
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px;
     margin-bottom: 10px;
 `;
 
@@ -55,11 +56,7 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
         if (showMetrics && marketSimulator) {
             interval = setInterval(() => {
                 const currentMetrics = marketSimulator.getPerformanceMetrics();
-                const queueMetrics = marketSimulator.messageQueue.getMetrics();
-                setMetrics({
-                    ...currentMetrics,
-                    queueMetrics
-                });
+                setMetrics(currentMetrics);
             }, 100);
         }
         return () => {
@@ -68,11 +65,16 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
     }, [showMetrics, marketSimulator]);
 
     const toggleMetrics = () => {
-        setShowMetrics(!showMetrics);
-        if (!showMetrics && marketSimulator) {
-            marketSimulator.enablePerformanceDebug();
-        } else if (marketSimulator) {
-            marketSimulator.disablePerformanceDebug();
+        if (!showMetrics) {
+            setShowMetrics(true);
+            if (marketSimulator && marketSimulator.performanceMonitor) {
+                marketSimulator.performanceMonitor.enableDebug();
+            }
+        } else {
+            setShowMetrics(false);
+            if (marketSimulator && marketSimulator.performanceMonitor) {
+                marketSimulator.performanceMonitor.disableDebug();
+            }
         }
     };
 
@@ -91,23 +93,27 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
                 <MetricsDisplay>
                     <MetricRow>
                         <span>Orders:</span>
-                        <span>{metrics.orderProcessingAvg.toFixed(1)}ms</span>
+                        <span>{metrics.orderCount}</span>
                     </MetricRow>
                     <MetricRow>
-                        <span>Updates:</span>
-                        <span>{metrics.stateUpdatesAvg.toFixed(1)}ms</span>
+                        <span>Update Rate:</span>
+                        <span>{metrics.updateRate.toFixed(1)}/s</span>
                     </MetricRow>
                     <MetricRow>
-                        <span>Frame:</span>
-                        <span>{metrics.frameTimeAvg.toFixed(1)}ms</span>
+                        <span>Market Cap:</span>
+                        <span>${metrics.marketCap.toLocaleString()}</span>
                     </MetricRow>
                     <MetricRow>
-                        <span>Queue:</span>
-                        <span>{metrics.queueMetrics?.queueLength || 0}</span>
+                        <span>Volatility:</span>
+                        <span>{(metrics.volatility * 100).toFixed(1)}%</span>
                     </MetricRow>
                     <MetricRow>
-                        <span>Processed:</span>
-                        <span>{metrics.queueMetrics?.processedCount || 0}</span>
+                        <span>Queue Size:</span>
+                        <span>{metrics.messageQueueSize}</span>
+                    </MetricRow>
+                    <MetricRow>
+                        <span>Update Time:</span>
+                        <span>{metrics.lastUpdateDuration.toFixed(1)}ms</span>
                     </MetricRow>
                 </MetricsDisplay>
             )}
