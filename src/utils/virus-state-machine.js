@@ -34,12 +34,9 @@ class VirusStateMachine {
 
         // Growth parameters with market influence
         this.growthParams = {
-            baseGrowthRate: 0.05,
-            maxPoints: 2000,
-            minWeight: 0.3,
-            decayRate: 0.02,
-            mutationRate: 0.01,
-            adaptationRate: 0.03
+            baseGrowthRate: 0.3,
+            decayRate: 0.05,
+            minWeight: 0.2
         };
 
         // Pattern recognition
@@ -73,7 +70,10 @@ class VirusStateMachine {
                 weight: 1.0,
                 generation: 0,
                 direction: null,
-                isSource: true
+                isSource: true,
+                intensity: center.intensity,
+                speed: center.speed,
+                branchingFactor: center.branchingFactor
             };
 
             this.stablePoints.set(key, point);
@@ -84,74 +84,11 @@ class VirusStateMachine {
     }
 
     updateMarketState(marketData) {
-        const previousStrength = this.marketState.strength;
-        
-        // Enhanced market state tracking
         this.marketState = {
-            trend: (marketData.marketCap - (this.lastMarketCap || marketData.marketCap)) / 
-                   (this.lastMarketCap || marketData.marketCap),
-            strength: Math.min(1, marketData.marketCap / 1000000),
+            trend: marketData.trend,
             volatility: marketData.volatility,
-            momentum: this.calculateMomentum(marketData),
-            volume: this.normalizeVolume(marketData.volume),
-            sentiment: this.calculateSentiment(marketData)
+            strength: marketData.strength
         };
-
-        this.lastMarketCap = marketData.marketCap;
-
-        // Get market response effects
-        const responseEffects = this.marketResponseSystem.processMarketUpdate({
-            trend: this.marketState.trend,
-            volatility: this.marketState.volatility,
-            volume: this.marketState.volume
-        });
-
-        // Store current values before applying effects
-        const currentGrowthRate = this.growthParams.baseGrowthRate;
-        const currentMutationRate = this.growthParams.mutationRate;
-        const currentAdaptationRate = this.growthParams.adaptationRate;
-
-        // Apply response effects to growth parameters with limits
-        const marketImpact = Math.min(0.7, Math.abs(this.marketState.trend) + this.marketState.volatility);
-        this.growthParams.baseGrowthRate = Math.max(0.01, 
-            currentGrowthRate * (responseEffects.spreadRate * (1 - marketImpact))); // Dynamic reduction based on market impact
-        this.growthParams.mutationRate = Math.max(0.005, 
-            currentMutationRate * responseEffects.mutationRate);
-        this.growthParams.adaptationRate = Math.max(0.01, 
-            currentAdaptationRate * responseEffects.recoveryRate);
-
-        // Additional growth rate adjustment for extreme market conditions
-        if (this.marketState.trend < -0.3 || this.marketState.volatility > 0.7) {
-            this.growthParams.baseGrowthRate *= 0.6; // Even more aggressive reduction
-        }
-
-        // Final adjustment for extreme volatility
-        if (this.marketState.volatility > 0.9) {
-            this.growthParams.baseGrowthRate *= 0.9; // Additional reduction for extreme volatility
-        }
-
-        // Apply response effects to adaptation metrics with limits
-        this.adaptation.resistanceFactor = Math.max(0.2, 
-            this.adaptation.resistanceFactor * responseEffects.resistanceFactor);
-        this.adaptation.mutationProbability = Math.max(0.005, 
-            this.adaptation.mutationProbability * responseEffects.mutationRate);
-        this.adaptation.recoveryRate = Math.max(0.01, 
-            this.adaptation.recoveryRate * responseEffects.recoveryRate);
-
-        // Update growth parameters based on market conditions
-        this.updateGrowthParameters();
-        
-        // Handle market conditions
-        if (this.marketState.trend < 0) {
-            this.handleMarketDecline();
-        } else {
-            this.handleMarketGrowth();
-        }
-
-        // Update adaptation metrics
-        this.updateAdaptationMetrics();
-        
-        return this.marketState;
     }
 
     calculateMomentum(marketData) {
@@ -257,7 +194,7 @@ class VirusStateMachine {
         return Math.random() < removalChance;
     }
 
-    evolve(progress) {
+    evolve(deltaTime) {
         if (this.growthFrontier.size === 0) {
             // Reinitialize from stable source points if frontier is empty
             this.stablePoints.forEach((point, key) => {
@@ -273,7 +210,7 @@ class VirusStateMachine {
         // Grow from frontier points
         this.growthFrontier.forEach((point, key) => {
             if (this.shouldGrow(point)) {
-                const newGrowthPoints = this.growFromPoint(point, progress);
+                const newGrowthPoints = this.growFromPoint(point, deltaTime);
                 
                 // Add new points
                 newGrowthPoints.forEach(newPoint => {
@@ -313,9 +250,9 @@ class VirusStateMachine {
         return Math.random() < growthChance;
     }
 
-    growFromPoint(point, progress) {
+    growFromPoint(point, deltaTime) {
         const newPoints = [];
-        const baseAngle = this.getGrowthDirection(point, progress);
+        const baseAngle = this.getGrowthDirection(point, deltaTime);
         
         // Main growth point
         const newPoint = this.createNewPoint(point, baseAngle);
@@ -336,7 +273,7 @@ class VirusStateMachine {
         return newPoints;
     }
 
-    getGrowthDirection(point, progress) {
+    getGrowthDirection(point, deltaTime) {
         const key = `${Math.floor(point.position.lng * 1000)},${Math.floor(point.position.lat * 1000)}`;
         const historicalDirection = this.growthHistory.get(key);
         
@@ -350,14 +287,14 @@ class VirusStateMachine {
             return point.direction + variation;
         } else {
             // New direction with market influence
-            const baseAngle = progress * Math.PI * 2;
+            const baseAngle = deltaTime * Math.PI * 2;
             const variation = (Math.random() - 0.5) * Math.PI * (1 - this.marketState.strength * 0.5);
             return baseAngle + variation;
         }
     }
 
     createNewPoint(sourcePoint, angle) {
-        const spreadDistance = 0.005 * (1 + this.marketState.strength * 0.5);
+        const spreadDistance = 0.005 * (1 + this.marketState.strength * 0.5) * sourcePoint.speed;
         
         const newLng = sourcePoint.position.lng + Math.cos(angle) * spreadDistance;
         const newLat = sourcePoint.position.lat + Math.sin(angle) * spreadDistance;
@@ -371,12 +308,15 @@ class VirusStateMachine {
             weight: sourcePoint.weight * 0.95,
             generation: sourcePoint.generation + 1,
             direction: angle,
-            isSource: false
+            isSource: false,
+            intensity: sourcePoint.intensity * 0.95,
+            speed: sourcePoint.speed,
+            branchingFactor: sourcePoint.branchingFactor
         };
     }
 
     shouldBranch(point) {
-        const branchChance = 0.2 * 
+        const branchChance = point.branchingFactor * 
             (1 + this.marketState.strength) * 
             (1 + this.marketState.volatility * 0.5) * 
             Math.max(0.2, 1 - (point.generation * 0.1));

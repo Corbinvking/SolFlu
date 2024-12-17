@@ -3,20 +3,20 @@ import { ScatterplotLayer, ArcLayer } from '@deck.gl/layers';
 import { COORDINATE_SYSTEM } from '@deck.gl/core';
 import MarketTranslator from '../../utils/market-translator';
 
-const BASE_RADIUS = 30;
-const HEATMAP_INTENSITY = 2;
+const BASE_RADIUS = 10;
+const HEATMAP_INTENSITY = 1.5;
 const ROUTE_WIDTH = 5;
 const MIN_ROUTE_WIDTH = 2;
 
 // Add constants for growth calculations
 const GROWTH_PARAMS = {
     INFECTION_RATE: {
-        MIN: 0.05,
-        MAX: 0.5
+        MIN: 0.2,
+        MAX: 0.8
     },
     SPREAD_DISTANCE: {
-        MIN: 0.001,
-        MAX: 0.01
+        MIN: 0.0005,
+        MAX: 0.005
     }
 };
 
@@ -59,12 +59,14 @@ class LayerManager {
                 getWeight: d => d.weight * HEATMAP_INTENSITY,
                 radiusPixels: BASE_RADIUS,
                 intensity: 1,
-                threshold: 0.1,
+                threshold: 0.05,
                 aggregation: 'SUM',
                 pickable: true,
                 autoHighlight: false,
                 visible: true,
-                opacity: 1,
+                opacity: 0.8,
+                radiusMinPixels: BASE_RADIUS,
+                radiusMaxPixels: BASE_RADIUS * 1.5,
                 colorRange: [
                     [255, 255, 178, 50],  // Light yellow with low alpha
                     [254, 204, 92, 100],  // Yellow
@@ -144,25 +146,27 @@ class LayerManager {
                 const key = `${center.lng},${center.lat}`;
                 this.growthSystem.sourcePoints.add(key);
                 
-                // Add center point to growth system
-                this.growthSystem.points.set(key, {
-                    point: {
-                        lng: center.lng,
-                        lat: center.lat,
-                        weight: 1.0
-                    },
-                    isEdge: true,
-                    generation: 0,
-                    direction: null
-                });
-                this.growthSystem.edges.add(key);
-
-                // Add to initial heatmap data
-                initialHeatmapData.push({
-                    lng: center.lng,
-                    lat: center.lat,
-                    weight: 1.0
-                });
+                // Generate multiple points around each center based on market conditions
+                const numPoints = Math.floor(5 + (volatility * 15)); // 5-20 points based on volatility
+                for (let i = 0; i < numPoints; i++) {
+                    const angle = (Math.PI * 2 * i) / numPoints;
+                    const distance = 0.001 + (Math.random() * 0.002); // Small random distance
+                    const newPoint = {
+                        lng: center.lng + (Math.cos(angle) * distance),
+                        lat: center.lat + (Math.sin(angle) * distance),
+                        weight: 0.5 + (Math.random() * 0.5) // Varying weights for natural look
+                    };
+                    
+                    const newKey = `${newPoint.lng},${newPoint.lat}`;
+                    this.growthSystem.points.set(newKey, {
+                        point: newPoint,
+                        isEdge: true,
+                        generation: 0,
+                        direction: angle
+                    });
+                    this.growthSystem.edges.add(newKey);
+                    initialHeatmapData.push(newPoint);
+                }
             });
 
             // Update the layer with initial data
@@ -174,9 +178,11 @@ class LayerManager {
                     ...heatmapLayer.props,
                     data: initialHeatmapData,
                     visible: true,
-                    opacity: 1,
-                    radiusPixels: Math.max(30, Math.min(60, BASE_RADIUS)),
-                    intensity: Math.max(1, Math.min(3.0, volatility * HEATMAP_INTENSITY)),
+                    opacity: 0.8,
+                    radiusPixels: BASE_RADIUS,
+                    radiusMinPixels: BASE_RADIUS,
+                    radiusMaxPixels: BASE_RADIUS * 1.5,
+                    intensity: Math.max(1, Math.min(2.0, volatility * HEATMAP_INTENSITY)),
                     threshold: 0.05,
                     colorRange: [
                         [255, 255, 178, 50],

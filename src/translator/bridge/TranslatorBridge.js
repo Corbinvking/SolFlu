@@ -2,6 +2,7 @@ const EventEmitter = require('events');
 const WebSocket = require('ws');
 const { MessageQueue } = require('./MessageQueue');
 const StateSync = require('./StateSync');
+const TranslationRules = require('../rules/TranslationRules');
 
 class TranslatorBridge {
     constructor(options = {}) {
@@ -10,6 +11,7 @@ class TranslatorBridge {
         this.messageQueue = new MessageQueue();
         this.stateSync = new StateSync();
         this.eventEmitter = new EventEmitter();
+        this.translationRules = new TranslationRules();
         this.isConnected = false;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
@@ -21,10 +23,17 @@ class TranslatorBridge {
         this._pendingEventEmitterSubscriptions = null;
         this.isReconnecting = false;
         this.messageCount = 0;
+        this.lastTranslatedState = null;
+        this._isInitializing = false;
     }
 
     async initialize() {
+        if (this._isInitializing) {
+            return false;
+        }
+
         try {
+            this._isInitializing = true;
             await this.setupSocketConnection();
             await this.initializeStateSync();
             this.startHeartbeat();
@@ -36,6 +45,8 @@ class TranslatorBridge {
         } catch (error) {
             console.error('Failed to initialize TranslatorBridge:', error);
             return false;
+        } finally {
+            this._isInitializing = false;
         }
     }
 
@@ -54,6 +65,12 @@ class TranslatorBridge {
             };
 
             const attemptConnection = () => {
+                if (this.isConnected) {
+                    cleanup();
+                    resolve(true);
+                    return;
+                }
+
                 connectionAttempts++;
                 
                 try {
@@ -119,7 +136,7 @@ class TranslatorBridge {
                         cleanup();
                         console.log(`WebSocket connection closed: ${code} - ${reason}`);
                         this.isConnected = false;
-                        if (!this.isConnected && connectionAttempts < maxAttempts) {
+                        if (!this.isConnected && connectionAttempts < maxAttempts && !this._isInitializing) {
                             console.log(`Retrying connection after ${attemptDelay}ms...`);
                             setTimeout(attemptConnection, attemptDelay);
                         } else {
@@ -186,6 +203,9 @@ class TranslatorBridge {
     }
 
     startHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+        }
         this.heartbeatInterval = setInterval(() => {
             if (this.isConnected) {
                 this.sendHeartbeat();
@@ -193,18 +213,79 @@ class TranslatorBridge {
         }, 30000); // Send heartbeat every 30 seconds
     }
 
+    translateMarketData(data) {
+        const marketMetrics = {
+            price: data.price || 0,
+            marketCap: data.marketCap || 0,
+            volatility: data.volatility || 0,
+            trend: data.trend || 0
+        };
+
+        const eventType = data.eventType || 'normal';
+        const marketState = data.metrics?.marketState || 'normal';
+
+        // Calculate virus parameters using translation rules
+        const spreadPattern = this.translationRules.determineSpreadPattern(eventType, marketMetrics);
+        const infectionRate = this.translationRules.calculateInfectionRate(marketMetrics.marketCap);
+        const recoveryRate = this.translationRules.calculateRecoveryRate(marketMetrics.volatility);
+        const mutationRate = this.translationRules.calculateMutationProbability(marketMetrics.volatility, marketMetrics.trend);
+        const marketImpact = this.translationRules.calculateMarketImpact(marketMetrics);
+
+        const translatedData = {
+            marketMetrics,
+            virusMetrics: {
+                spreadFactor: spreadPattern.intensity,
+                mutationRate,
+                spreadSpeed: spreadPattern.speed,
+                recoveryRate,
+                pattern: spreadPattern.type,
+                direction: spreadPattern.direction,
+                intensity: marketImpact.total
+            },
+            eventType,
+            marketState,
+            sequence: data.sequence,
+            timestamp: data.timestamp || Date.now()
+        };
+
+        // Track significant changes
+        const hasSignificantChange = this.detectSignificantChange(translatedData);
+        if (hasSignificantChange) {
+            console.log('Significant market change detected:', {
+                eventType,
+                marketState,
+                spreadFactor: translatedData.virusMetrics.spreadFactor,
+                mutationRate: translatedData.virusMetrics.mutationRate,
+                pattern: translatedData.virusMetrics.pattern,
+                impact: marketImpact.total
+            });
+        }
+
+        this.lastTranslatedState = translatedData;
+        return translatedData;
+    }
+
+    detectSignificantChange(newState) {
+        if (!this.lastTranslatedState) return true;
+
+        const threshold = 0.2; // 20% change threshold
+        const metrics = newState.virusMetrics;
+        const lastMetrics = this.lastTranslatedState.virusMetrics;
+
+        return (
+            Math.abs(metrics.spreadFactor - lastMetrics.spreadFactor) > threshold ||
+            Math.abs(metrics.mutationRate - lastMetrics.mutationRate) > threshold ||
+            Math.abs(metrics.spreadSpeed - lastMetrics.spreadSpeed) > threshold ||
+            metrics.pattern !== lastMetrics.pattern ||
+            metrics.direction !== lastMetrics.direction ||
+            newState.eventType !== this.lastTranslatedState.eventType ||
+            newState.marketState !== this.lastTranslatedState.marketState
+        );
+    }
+
     async handleMarketUpdate(data) {
         try {
-            const translatedData = {
-                marketMetrics: {
-                    price: data.price || 0,
-                    volume: data.volume || 0,
-                    marketCap: data.marketCap || 0,
-                    volatility: data.volatility || 0
-                },
-                sequence: data.sequence,
-                timestamp: Date.now()
-            };
+            const translatedData = this.translateMarketData(data);
 
             if (!this.isConnected) {
                 await this.setupSocketConnection();
@@ -218,6 +299,10 @@ class TranslatorBridge {
             
             await this.sendMessage(message);
             this.stateSync.update(translatedData);
+            
+            // Emit translated data for visualization layer
+            this.eventEmitter.emit('virusUpdate', translatedData.virusMetrics);
+            
             return translatedData;
         } catch (error) {
             this.eventEmitter.emit('error', {
@@ -226,19 +311,6 @@ class TranslatorBridge {
             });
             throw error;
         }
-    }
-
-    translateMarketData(data) {
-        return {
-            marketMetrics: {
-                price: data.price || 0,
-                volume: data.volume || 0,
-                marketCap: data.marketCap || 0,
-                volatility: data.volatility || 0
-            },
-            sequence: data.sequence,
-            timestamp: Date.now()
-        };
     }
 
     notifySubscribers(eventType, data) {
@@ -531,6 +603,7 @@ class TranslatorBridge {
 
                 this.isConnected = false;
                 this.isReconnecting = false;
+                this._isInitializing = false;
                 this.messageCount = 0;
                 
                 // Clear event handlers
@@ -554,7 +627,7 @@ class TranslatorBridge {
                     // Reset event emitter
                     this.eventEmitter.removeAllListeners();
                 }
-                
+
                 // Clear subscriptions unless we're in reconnection
                 if (!this._pendingSubscriptions) {
                     this.subscriptions.clear();

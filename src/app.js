@@ -1,14 +1,13 @@
-import React from 'react';
-import ErrorBoundary from './components/ErrorBoundary';
-import SpreadVisualizationTest from './components/SpreadVisualizationTest';
-import './styles/map.css';
+﻿import React from 'react';
+import SimpleSpreadMap from './actual-components/components/SimpleSpreadMap.js';
+import './styles/App.css';
 
-const App = () => {
-    return (
-        <ErrorBoundary>
-            <SpreadVisualizationTest />
-        </ErrorBoundary>
-    );
-};
+function App() {
+  return (
+    <div className="App">
+      <SimpleSpreadMap />
+    </div>
+  );
+}
 
 export default App;

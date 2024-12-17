@@ -1,56 +1,45 @@
 export class AnimationController {
     constructor() {
-        this.duration = 1000;
-        this.onFrame = null;
-        this.startTime = null;
-        this.animationFrame = null;
-        this.isRunning = false;
+        this.isRunning = true;
+        this.lastUpdate = performance.now();
+        this.callbacks = new Set();
     }
 
-    setDuration(duration) {
-        this.duration = duration;
+    addUpdateCallback(callback) {
+        this.callbacks.add(callback);
     }
 
-    setOnFrame(callback) {
-        this.onFrame = callback;
+    removeUpdateCallback(callback) {
+        this.callbacks.delete(callback);
+    }
+
+    update(timestamp) {
+        if (!this.isRunning) return;
+
+        const deltaTime = (timestamp - this.lastUpdate) / 1000;
+        this.lastUpdate = timestamp;
+
+        this.callbacks.forEach(callback => {
+            try {
+                callback(deltaTime);
+            } catch (error) {
+                console.error('Error in animation callback:', error);
+            }
+        });
     }
 
     start() {
-        if (this.isRunning) return;
-        
         this.isRunning = true;
-        this.startTime = performance.now();
-        this.animate();
+        this.lastUpdate = performance.now();
     }
 
     stop() {
         this.isRunning = false;
-        if (this.animationFrame) {
-            cancelAnimationFrame(this.animationFrame);
-            this.animationFrame = null;
-        }
-    }
-
-    animate = (timestamp) => {
-        if (!this.isRunning) return;
-
-        const elapsed = timestamp - this.startTime;
-        const progress = Math.min(1, elapsed / this.duration);
-
-        if (this.onFrame) {
-            this.onFrame(progress);
-        }
-
-        if (progress < 1) {
-            this.animationFrame = requestAnimationFrame(this.animate);
-        } else {
-            this.stop();
-        }
     }
 
     cleanup() {
         this.stop();
-        this.onFrame = null;
+        this.callbacks.clear();
     }
 }
 

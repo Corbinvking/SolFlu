@@ -30,13 +30,17 @@ module.exports = {
             template: './public/index.html',
             inject: true
         }),
-        new Dotenv(),
-        new webpack.DefinePlugin({
-            'process.env.REACT_APP_MAPBOX_TOKEN': JSON.stringify(process.env.REACT_APP_MAPBOX_TOKEN)
-        })
+        new Dotenv()
     ],
     resolve: {
         extensions: ['.js', '.jsx'],
+        modules: ['node_modules'],
+        alias: {
+            '@': path.resolve(__dirname, 'src'),
+            '@components': path.resolve(__dirname, 'src/actual-components/components'),
+            '@core': path.resolve(__dirname, 'src/actual-components/core'),
+            '@utils': path.resolve(__dirname, 'src/actual-components/utils')
+        },
         fallback: {
             "stream": require.resolve("stream-browserify"),
             "buffer": require.resolve("buffer/"),
@@ -54,7 +58,7 @@ module.exports = {
             directory: path.join(__dirname, 'public'),
         },
         compress: true,
-        port: 5000,
+        port: 3001,
         hot: true,
         open: true,
         client: {

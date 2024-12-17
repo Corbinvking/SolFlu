@@ -60,8 +60,8 @@ class SpreadPatternManager {
         });
     }
 
-    createPattern(type, initialPosition) {
-        const template = this.patternTemplates[type];
+    createPattern(type, initialPosition, customTemplate = null) {
+        const template = customTemplate || this.patternTemplates[type];
         if (!template) {
             throw new Error(`Unknown pattern type: ${type}`);
         }

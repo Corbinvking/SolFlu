@@ -11,7 +11,7 @@ export class LayerManager {
     }
 
     addVirusSpread(id, data, config = {}) {
-        console.log('Adding virus spread:', { id, data, config });
+        console.log('LayerManager: Adding virus spread:', { id, data, config });
         
         // Generate spread points with higher density
         const spreadPoints = [];
@@ -42,6 +42,8 @@ export class LayerManager {
                 weight: 0.3 + Math.random() * 0.3
             });
         }
+
+        console.log('LayerManager: Generated spread points:', spreadPoints.length);
 
         // Create layers
         const heatmapLayer = new HeatmapLayer({
@@ -79,6 +81,8 @@ export class LayerManager {
             coordinateSystem: COORDINATE_SYSTEM.LNGLAT
         });
 
+        console.log('LayerManager: Created layers:', { heatmapId: heatmapLayer.id, pointId: pointLayer.id });
+
         // Update layers array
         this.layers = this.layers.filter(l => !l.id.startsWith(id));
         this.layers.push(heatmapLayer);
@@ -92,6 +96,7 @@ export class LayerManager {
         };
 
         this.activeAnimations.set(id, animation);
+        console.log('LayerManager: Added animation for pattern:', id);
 
         return this.animationController;
     }
@@ -127,14 +132,51 @@ export class LayerManager {
             }
         }
 
+        if (updatedPatterns.length > 0) {
+            console.log('LayerManager: Updated patterns:', updatedPatterns);
+        }
+
         return updatedPatterns;
     }
 
     updateLayer(id, props) {
+        console.log('LayerManager: Updating layer:', id, props);
+        
+        if (props.remove) {
+            console.log('LayerManager: Removing layer:', id);
+            this.layers = this.layers.filter(l => l.id !== id);
+            return;
+        }
+
         const layerIndex = this.layers.findIndex(l => l.id === id);
         if (layerIndex >= 0) {
             const layer = this.layers[layerIndex];
-            this.layers[layerIndex] = layer.clone(props);
+            
+            // Create new layer with updated properties
+            const updatedProps = {
+                ...layer.props,
+                ...props,
+                updateTriggers: {
+                    ...layer.props.updateTriggers,
+                    ...props.updateTriggers,
+                    getWeight: Date.now(),
+                    getRadius: Date.now(),
+                    intensity: Date.now(),
+                    _timestamp: Date.now() // Force update
+                }
+            };
+
+            const updatedLayer = layer.clone(updatedProps);
+            
+            // Create new array to trigger React re-render
+            this.layers = [
+                ...this.layers.slice(0, layerIndex),
+                updatedLayer,
+                ...this.layers.slice(layerIndex + 1)
+            ];
+            console.log('LayerManager: Layer updated successfully with props:', updatedProps);
+        } else {
+            console.log('LayerManager: Layer not found:', id);
         }
     }
 
