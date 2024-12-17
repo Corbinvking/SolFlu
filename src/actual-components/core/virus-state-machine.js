@@ -94,17 +94,45 @@ class VirusStateMachine {
             speed: 0.5,
             pattern: 'normal',
             marketCap: 380000,
-            targetCoverage: 20
+            targetCoverage: 20,
+            growthMultiplier: 1.0
         };
         this.center = [0, 0];
         this.maxPoints = 2000;
         this.baseSpreadRadius = 0.02;
         this.lastGrowthTime = Date.now();
         this.growthInterval = 16;
+        this.growthTimeout = null;
 
         // Initialize subsystems
         this.mutationSystem = new MutationSystem();
         this.transmissionPatterns = new TransmissionPatterns();
+    }
+
+    boostSpread(multiplier) {
+        console.log('Boosting spread rate:', multiplier);
+        this.params.growthMultiplier = multiplier;
+        
+        // Reset multiplier after 5 seconds
+        if (this.growthTimeout) {
+            clearTimeout(this.growthTimeout);
+        }
+        this.growthTimeout = setTimeout(() => {
+            this.params.growthMultiplier = 1.0;
+        }, 5000);
+    }
+
+    suppressSpread(multiplier) {
+        console.log('Suppressing spread rate:', multiplier);
+        this.params.growthMultiplier = multiplier;
+        
+        // Reset multiplier after 5 seconds
+        if (this.growthTimeout) {
+            clearTimeout(this.growthTimeout);
+        }
+        this.growthTimeout = setTimeout(() => {
+            this.params.growthMultiplier = 1.0;
+        }, 5000);
     }
 
     initialize(center, params) {
@@ -147,10 +175,21 @@ class VirusStateMachine {
     }
 
     updateTerritory() {
-        // Calculate target coverage from market cap with a minimum value
-        const scaledMarketCap = this.params.marketCap * 1000; // Scale up market cap
-        const targetCoverage = Math.max(20, Math.floor(scaledMarketCap / 1000));
-        console.log('Market Cap:', this.params.marketCap, 'Target Coverage:', targetCoverage);
+        // Use logarithmic scaling for market cap to prevent hitting a hard limit
+        const scaledMarketCap = Math.log10(Math.max(100, this.params.marketCap)) * 1000;
+        const baseTargetCoverage = Math.max(20, Math.floor(scaledMarketCap));
+        const targetCoverage = Math.floor(baseTargetCoverage * this.params.growthMultiplier);
+
+        console.log('Virus Growth Check:', {
+            currentMarketCap: this.params.marketCap,
+            scaledMarketCap,
+            baseTargetCoverage,
+            targetCoverage,
+            growthMultiplier: this.params.growthMultiplier,
+            currentCoverage: this.territory.coverage,
+            currentPoints: this.points.length,
+            edgePoints: this.territory.edges.size
+        });
 
         if (this.territory.coverage < targetCoverage) {
             // Get all edge points for potential growth
@@ -158,17 +197,33 @@ class VirusStateMachine {
                 .map(key => this.territory.points.get(key))
                 .filter(point => point.isEdge);
 
-            // Try to grow from each edge point with a probability
+            let growthCount = 0;
+            // Dynamic growth probability based on how far we are from target
+            const coverageRatio = this.territory.coverage / targetCoverage;
+            const baseGrowthProbability = 0.3 * (1 - coverageRatio);
+            const adjustedProbability = baseGrowthProbability * this.params.growthMultiplier;
+
+            // Try to grow from each edge point with dynamic probability
             edgePoints.forEach(point => {
-                if (Math.random() < 0.2) { // Increased chance to grow
+                if (Math.random() < adjustedProbability) {
                     const availablePositions = this.territory.getNeighborPositions(point.position);
                     if (availablePositions.length > 0) {
                         const newPosition = availablePositions[Math.floor(Math.random() * availablePositions.length)];
                         const newPoint = new VirusPoint(newPosition, 1.0, this.params.colorIntensity);
                         this.points.push(newPoint);
                         this.territory.addPoint(newPoint);
+                        growthCount++;
                     }
                 }
+            });
+
+            console.log('Growth Result:', {
+                attemptedFrom: edgePoints.length,
+                newPointsAdded: growthCount,
+                totalPoints: this.points.length,
+                coverageRatio,
+                baseGrowthProbability,
+                adjustedProbability
             });
         } else if (this.territory.coverage > targetCoverage) {
             // Remove points from the edges when shrinking
@@ -176,13 +231,24 @@ class VirusStateMachine {
                 .map(key => this.territory.points.get(key))
                 .filter(point => point.isEdge);
 
-            // Remove a small number of edge points
-            const pointsToRemove = Math.min(1, Math.floor((this.territory.coverage - targetCoverage) * 0.1));
+            // More gradual shrinking based on how far we are over target
+            const shrinkRatio = (this.territory.coverage - targetCoverage) / targetCoverage;
+            const pointsToRemove = Math.min(
+                10,
+                Math.floor(edgePoints.length * shrinkRatio * 0.1)
+            );
+
             for (let i = 0; i < pointsToRemove && edgePoints.length > 0; i++) {
                 const pointToRemove = edgePoints[Math.floor(Math.random() * edgePoints.length)];
                 this.territory.removePoint(pointToRemove.position);
                 this.points = this.points.filter(p => p !== pointToRemove);
             }
+
+            console.log('Shrink Result:', {
+                shrinkRatio,
+                pointsRemoved: pointsToRemove,
+                remainingPoints: this.points.length
+            });
         }
     }
 

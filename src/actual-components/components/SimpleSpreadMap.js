@@ -8,6 +8,7 @@ import TranslatorBridge from '../integration/translator-bridge';
 import VirusStateMachine from '../core/virus-state-machine';
 import OrderBookDisplay from './OrderBookDisplay';
 import DevPanel from '../../components/DevPanel';
+import PerformanceReport from '../../components/PerformanceReport';
 
 const SimpleSpreadMap = () => {
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -165,7 +166,9 @@ const SimpleSpreadMap = () => {
                 onVirusBoost={handleVirusBoost}
                 onVirusSuppress={handleVirusSuppress}
                 onResetSimulation={handleResetSimulation}
+                marketSimulator={marketRef.current}
             />
+            <PerformanceReport marketSimulator={marketRef.current} />
         </div>
     );
 };

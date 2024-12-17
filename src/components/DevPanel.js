@@ -1,94 +1,118 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 
-const PanelContainer = styled.div`
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  background: rgba(28, 32, 38, 0.95);
-  border: 1px solid #2a2e35;
-  border-radius: 8px;
-  padding: 15px;
-  color: #fff;
-  font-family: 'Inter', sans-serif;
-  z-index: 1000;
-  min-width: 200px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+const Panel = styled.div`
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 15px;
+    border-radius: 8px;
+    color: white;
+    font-family: monospace;
+    z-index: 1000;
+    max-width: 200px;
 `;
 
-const PanelHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #2a2e35;
+const Button = styled.button`
+    background: #2c3e50;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    margin: 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+        background: #34495e;
+    }
 `;
 
-const Title = styled.h3`
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #8f9ba8;
+const MetricsDisplay = styled.div`
+    margin-top: 10px;
+    font-size: 12px;
+    border-top: 1px solid #666;
+    padding-top: 10px;
 `;
 
-const ControlButton = styled.button`
-  background: #2a2e35;
-  border: 1px solid #3a3f48;
-  border-radius: 4px;
-  color: #fff;
-  padding: 8px 12px;
-  margin: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #3a3f48;
-    border-color: #4a4f58;
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
+const MetricRow = styled.div`
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
 `;
 
-const ButtonGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+const ButtonContainer = styled.div`
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
 `;
 
-const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimulator }) => {
+    const [metrics, setMetrics] = useState(null);
+    const [showMetrics, setShowMetrics] = useState(false);
 
-  return (
-    <PanelContainer>
-      <PanelHeader>
-        <Title>Development Controls</Title>
-        <ControlButton 
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          style={{ padding: '4px 8px' }}
-        >
-          {isCollapsed ? '+' : '-'}
-        </ControlButton>
-      </PanelHeader>
-      
-      {!isCollapsed && (
-        <ButtonGroup>
-          <ControlButton onClick={onVirusBoost}>
-            Boost Virus Spread
-          </ControlButton>
-          <ControlButton onClick={onVirusSuppress}>
-            Suppress Virus
-          </ControlButton>
-          <ControlButton onClick={onResetSimulation}>
-            Reset Simulation
-          </ControlButton>
-        </ButtonGroup>
-      )}
-    </PanelContainer>
-  );
+    useEffect(() => {
+        let interval;
+        if (showMetrics && marketSimulator) {
+            interval = setInterval(() => {
+                const currentMetrics = marketSimulator.getPerformanceMetrics();
+                const queueMetrics = marketSimulator.messageQueue.getMetrics();
+                setMetrics({
+                    ...currentMetrics,
+                    queueMetrics
+                });
+            }, 100);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [showMetrics, marketSimulator]);
+
+    const toggleMetrics = () => {
+        setShowMetrics(!showMetrics);
+        if (!showMetrics && marketSimulator) {
+            marketSimulator.enablePerformanceDebug();
+        } else if (marketSimulator) {
+            marketSimulator.disablePerformanceDebug();
+        }
+    };
+
+    return (
+        <Panel>
+            <ButtonContainer>
+                <Button onClick={onVirusBoost}>Boost</Button>
+                <Button onClick={onVirusSuppress}>Suppress</Button>
+                <Button onClick={onResetSimulation}>Reset</Button>
+                <Button onClick={toggleMetrics}>
+                    {showMetrics ? 'Hide Stats' : 'Show Stats'}
+                </Button>
+            </ButtonContainer>
+
+            {showMetrics && metrics && (
+                <MetricsDisplay>
+                    <MetricRow>
+                        <span>Orders:</span>
+                        <span>{metrics.orderProcessingAvg.toFixed(1)}ms</span>
+                    </MetricRow>
+                    <MetricRow>
+                        <span>Updates:</span>
+                        <span>{metrics.stateUpdatesAvg.toFixed(1)}ms</span>
+                    </MetricRow>
+                    <MetricRow>
+                        <span>Frame:</span>
+                        <span>{metrics.frameTimeAvg.toFixed(1)}ms</span>
+                    </MetricRow>
+                    <MetricRow>
+                        <span>Queue:</span>
+                        <span>{metrics.queueMetrics?.queueLength || 0}</span>
+                    </MetricRow>
+                    <MetricRow>
+                        <span>Processed:</span>
+                        <span>{metrics.queueMetrics?.processedCount || 0}</span>
+                    </MetricRow>
+                </MetricsDisplay>
+            )}
+        </Panel>
+    );
 };
 
 export default DevPanel; 

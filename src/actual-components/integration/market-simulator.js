@@ -1,3 +1,6 @@
+import PerformanceMonitor from './performance-monitor';
+import MessageQueue from './message-queue';
+
 class Order {
     constructor(price, amount, side, makerId = null) {
         this.price = price;
@@ -117,18 +120,41 @@ class OrderBook {
     }
 
     checkForTrades() {
+        if (this.buyLevels.size === 0 || this.sellLevels.size === 0) return;
+        
         const bestBid = Math.max(...this.buyLevels.keys());
         const bestAsk = Math.min(...this.sellLevels.keys());
         
+        // Execute trades when orders cross or match
         if (bestBid >= bestAsk) {
             this.executeTrade(bestBid, bestAsk);
+        } else {
+            // Update current price to mid-market when no trades
+            this.currentPrice = (bestBid + bestAsk) / 2;
         }
+
+        // Notify subscribers of price update
+        this.notifySubscribers(this.getMarketState());
     }
 
     executeTrade(bidPrice, askPrice) {
         const price = (bidPrice + askPrice) / 2;
         this.lastTradePrice = price;
         this.currentPrice = price;
+        
+        // Match and remove orders that crossed
+        const buyLevel = this.buyLevels.get(bidPrice);
+        const sellLevel = this.sellLevels.get(askPrice);
+        
+        if (buyLevel && sellLevel) {
+            const buyOrders = Array.from(buyLevel.orders.values());
+            const sellOrders = Array.from(sellLevel.orders.values());
+            
+            // Match orders and remove them
+            const matchSize = Math.min(buyOrders[0].amount, sellOrders[0].amount);
+            this.removeOrder(buyOrders[0].makerId, bidPrice, 'buy');
+            this.removeOrder(sellOrders[0].makerId, askPrice, 'sell');
+        }
         
         // Record the trade
         this.recentTrades.push({
@@ -137,7 +163,7 @@ class OrderBook {
         });
         
         // Keep only recent trades
-        if (this.recentTrades.length > 100) {
+        while (this.recentTrades.length > 100) {
             this.recentTrades.shift();
         }
     }
@@ -147,13 +173,16 @@ class OrderBook {
         const baseAmount = Math.random() * 1000;
         const amount = Math.floor(baseAmount);
         
+        // Generate price relative to current best bid/ask
         let price;
         if (side === 'buy') {
+            const bestBid = this.buyLevels.size > 0 ? Math.max(...this.buyLevels.keys()) : this.currentPrice;
             const spread = Math.random() * 0.0005;
-            price = Math.round((this.currentPrice - spread) * 10000) / 10000;
+            price = Math.round((bestBid - spread) * 10000) / 10000;
         } else {
+            const bestAsk = this.sellLevels.size > 0 ? Math.min(...this.sellLevels.keys()) : this.currentPrice;
             const spread = Math.random() * 0.0005;
-            price = Math.round((this.currentPrice + spread) * 10000) / 10000;
+            price = Math.round((bestAsk + spread) * 10000) / 10000;
         }
         
         return this.addOrder(price, amount, side);
@@ -162,8 +191,16 @@ class OrderBook {
     generateWhaleOrder() {
         const side = Math.random() > 0.5 ? 'buy' : 'sell';
         const amount = 5000 + Math.floor(Math.random() * 10000);
-        const priceImpact = (Math.random() * 0.001) * (side === 'buy' ? 1 : -1);
-        const price = Math.round((this.currentPrice + priceImpact) * 10000) / 10000;
+        
+        // Generate aggressive whale orders that are more likely to execute
+        let price;
+        if (side === 'buy') {
+            const bestAsk = this.sellLevels.size > 0 ? Math.min(...this.sellLevels.keys()) : this.currentPrice;
+            price = Math.round((bestAsk + 0.0002) * 10000) / 10000; // Aggressive buy above ask
+        } else {
+            const bestBid = this.buyLevels.size > 0 ? Math.max(...this.buyLevels.keys()) : this.currentPrice;
+            price = Math.round((bestBid - 0.0002) * 10000) / 10000; // Aggressive sell below bid
+        }
         
         return this.addOrder(price, amount, side);
     }
@@ -223,7 +260,15 @@ class OrderBook {
         const totalSellVolume = Array.from(this.sellLevels.values())
             .reduce((sum, level) => sum + level.totalAmount, 0);
         
-        return (totalBuyVolume + totalSellVolume) * this.currentPrice;
+        const baseMarketCap = 1000;
+        const marketCap = baseMarketCap + (totalBuyVolume + totalSellVolume) * this.currentPrice;
+        console.log('Market Cap Calculation:', {
+            buyVolume: totalBuyVolume,
+            sellVolume: totalSellVolume,
+            price: this.currentPrice,
+            marketCap: marketCap
+        });
+        return marketCap;
     }
 
     calculateTrend() {
@@ -239,15 +284,60 @@ class OrderBook {
 
 class MarketSimulator {
     constructor() {
-        this.orderBook = new OrderBook(0.03); // Starting price at $0.03
+        this.orderBook = new OrderBook(0.03);
         this.running = false;
         this.lastWhaleEvent = Date.now();
-        this.whaleEventInterval = 300000; // 5 minutes
-        this.whaleEventVariance = 600000; // ±10 minutes
-        this.orderInterval = null;
-        this.whaleInterval = null;
+        this.whaleEventInterval = 300000;
+        this.whaleEventVariance = 600000;
         this.volatilityMultiplier = 1.0;
         this.volatilityTimeout = null;
+        this.lastOrderTime = Date.now();
+        this.orderGenerationRate = 16; // Increased frequency to ~60fps
+        this.performanceMonitor = new PerformanceMonitor();
+        this.messageQueue = new MessageQueue();
+        
+        // Set up message handlers
+        this.messageQueue.subscribe('order', this.handleOrderMessage.bind(this));
+        this.messageQueue.subscribe('whale', this.handleWhaleMessage.bind(this));
+        this.messageQueue.subscribe('cleanup', this.handleCleanupMessage.bind(this));
+    }
+
+    handleOrderMessage(orderData) {
+        return Promise.resolve(
+            this.performanceMonitor.measureOperation(
+                () => this.orderBook.generateRandomOrder(),
+                'orderProcessing'
+            )
+        ).then(result => {
+            console.log('Order processed:', {
+                buyLevels: this.orderBook.buyLevels.size,
+                sellLevels: this.orderBook.sellLevels.size,
+                marketCap: this.orderBook.calculateMarketCap(),
+                queueSize: this.messageQueue.getMetrics().queueLength
+            });
+            return result;
+        });
+    }
+
+    handleWhaleMessage(whaleData) {
+        return Promise.resolve(
+            this.performanceMonitor.measureOperation(
+                () => this.orderBook.generateWhaleOrder(),
+                'orderProcessing'
+            )
+        );
+    }
+
+    handleCleanupMessage() {
+        return Promise.resolve(
+            this.performanceMonitor.measureOperation(
+                () => {
+                    this.cleanupOldOrders();
+                    this.updateOrderAges();
+                },
+                'stateUpdates'
+            )
+        );
     }
 
     start() {
@@ -256,31 +346,81 @@ class MarketSimulator {
 
         // Generate initial orders
         for (let i = 0; i < 50; i++) {
-            this.orderBook.generateRandomOrder();
+            this.messageQueue.enqueue('order', {}, 2);
         }
 
-        // Generate regular orders every 100-500ms
-        this.orderInterval = setInterval(() => {
-            if (Math.random() < 0.8) {
-                this.orderBook.generateRandomOrder();
-            }
-            
-            // Update all order ages
-            this.updateOrderAges();
-            
-        }, 100 + Math.random() * 400);
+        // Continuous order generation using requestAnimationFrame
+        const generateOrders = () => {
+            if (!this.running) return;
 
-        // Check for whale events
-        this.whaleInterval = setInterval(() => {
+            const frameStart = performance.now();
             const now = Date.now();
+            const timeSinceLastOrder = now - this.lastOrderTime;
+
+            // Generate orders based on time elapsed
+            if (timeSinceLastOrder >= this.orderGenerationRate) {
+                const ordersToGenerate = Math.floor(Math.random() * 3) + 1;
+                for (let i = 0; i < ordersToGenerate; i++) {
+                    this.messageQueue.enqueue('order', {}, 2);
+                }
+                this.lastOrderTime = now;
+            }
+
+            // Check for whale events
             if (now - this.lastWhaleEvent > this.whaleEventInterval) {
                 if (Math.random() < 0.4) {
-                    this.orderBook.generateWhaleOrder();
+                    this.messageQueue.enqueue('whale', {}, 3);
                     this.lastWhaleEvent = now;
                     this.whaleEventInterval = 300000 + (Math.random() * this.whaleEventVariance - this.whaleEventVariance/2);
                 }
             }
-        }, 60000);
+
+            // Queue cleanup operations
+            this.messageQueue.enqueue('cleanup', {}, 1);
+
+            // Measure frame time
+            const frameDuration = performance.now() - frameStart;
+            this.performanceMonitor.addMetric('frameTime', frameDuration);
+
+            // Continue the animation loop
+            requestAnimationFrame(generateOrders);
+        };
+
+        // Start the animation loop
+        requestAnimationFrame(generateOrders);
+    }
+
+    getPerformanceMetrics() {
+        return this.performanceMonitor.getMetricsSummary();
+    }
+
+    enablePerformanceDebug() {
+        this.performanceMonitor.enableDebug();
+    }
+
+    disablePerformanceDebug() {
+        this.performanceMonitor.disableDebug();
+    }
+
+    cleanupOldOrders() {
+        const now = Date.now();
+        const maxAge = 60000; // 1 minute max age for orders
+
+        const cleanupLevel = (level) => {
+            Array.from(level.orders.entries()).forEach(([makerId, order]) => {
+                if (now - order.timestamp > maxAge) {
+                    level.removeOrder(makerId);
+                }
+            });
+        };
+
+        // Cleanup old orders from both buy and sell sides
+        this.orderBook.buyLevels.forEach(cleanupLevel);
+        this.orderBook.sellLevels.forEach(cleanupLevel);
+    }
+
+    stop() {
+        this.running = false;
     }
 
     updateOrderAges() {
@@ -291,12 +431,6 @@ class MarketSimulator {
 
         this.orderBook.buyLevels.forEach(updateLevelOrders);
         this.orderBook.sellLevels.forEach(updateLevelOrders);
-    }
-
-    stop() {
-        this.running = false;
-        if (this.orderInterval) clearInterval(this.orderInterval);
-        if (this.whaleInterval) clearInterval(this.whaleInterval);
     }
 
     subscribe(callback) {
