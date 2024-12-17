@@ -46,16 +46,51 @@ const SimpleSpreadMap = () => {
         }
     };
 
+    const updateVisualization = (points) => {
+        if (!points || points.length === 0) {
+            console.log('No points to render');
+            return;
+        }
+
+        const scatterLayer = new ScatterplotLayer({
+            id: 'virus-points',
+            data: points,
+            getPosition: d => d.position,
+            getRadius: 3,  // Fixed small size
+            getFillColor: d => [
+                255, // Red
+                Math.min(255, d.colorIntensity * 255), // Green (based on volatility)
+                0, // Blue
+                255 // Full alpha
+            ],
+            pickable: false,
+            opacity: 1,
+            stroked: false,
+            filled: true,
+            radiusUnits: 'pixels',
+            radiusScale: 1,
+            radiusMinPixels: 3,
+            radiusMaxPixels: 3,
+            updateTriggers: {
+                getFillColor: [points.map(p => p.colorIntensity)]
+            }
+        });
+
+        setLayers([scatterLayer]);
+    };
+
     useEffect(() => {
-        console.log('Initializing components...');
+        console.log('Initializing with view state:', viewState);
         
         // Initialize components
         marketRef.current = new MarketSimulator();
         translatorRef.current = new TranslatorBridge();
         virusRef.current = new VirusStateMachine();
 
-        // Initialize virus state
+        // Initialize virus state at center of view
         const center = [viewState.longitude, viewState.latitude];
+        console.log('Setting initial center at:', center);
+        
         const initialMarketState = marketRef.current.getMarketState();
         const initialVirusParams = translatorRef.current.translateMarketState(initialMarketState);
         virusRef.current.initialize(center, initialVirusParams);
@@ -73,23 +108,18 @@ const SimpleSpreadMap = () => {
         // Animation loop
         const animate = () => {
             const now = performance.now();
-            const deltaTime = (now - lastTimeRef.current) / 1000; // Convert to seconds
+            const deltaTime = (now - lastTimeRef.current) / 1000;
             lastTimeRef.current = now;
 
-            // Update virus state
             virusRef.current.update(deltaTime);
-
-            // Get current points and update visualization
             const points = virusRef.current.getPoints();
             updateVisualization(points);
 
             animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        // Start animation loop
         animate();
 
-        // Cleanup
         return () => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
@@ -100,32 +130,9 @@ const SimpleSpreadMap = () => {
         };
     }, []);
 
-    const updateVisualization = (points) => {
-        const scatterLayer = new ScatterplotLayer({
-            id: 'virus-points',
-            data: points,
-            getPosition: d => d.position,
-            getRadius: d => Math.max(50, d.intensity * 500),
-            getFillColor: d => [
-                255, // Red
-                Math.min(255, d.colorIntensity * 255), // Green (based on volatility)
-                0, // Blue
-                Math.min(255, (d.intensity + d.colorIntensity) * 127) // Alpha (combined effect)
-            ],
-            pickable: true,
-            opacity: 0.9,
-            stroked: false,
-            filled: true,
-            radiusUnits: 'pixels',
-            radiusScale: 1,
-            radiusMinPixels: 3,
-            radiusMaxPixels: 20,
-            parameters: {
-                depthTest: false
-            }
-        });
-
-        setLayers([scatterLayer]);
+    const handleViewStateChange = ({ viewState }) => {
+        console.log('View state changed:', viewState);
+        setViewState(viewState);
     };
 
     return (
@@ -133,8 +140,8 @@ const SimpleSpreadMap = () => {
             <DeckGL
                 viewState={viewState}
                 controller={{
-                    dragRotate: true,
-                    touchRotate: true,
+                    dragRotate: false,
+                    touchRotate: false,
                     keyboard: true,
                     dragPan: true,
                     touchZoom: true,
@@ -142,8 +149,8 @@ const SimpleSpreadMap = () => {
                     scrollZoom: true
                 }}
                 layers={layers}
-                onViewStateChange={({ viewState }) => setViewState(viewState)}
-                projection="mercator"
+                onViewStateChange={handleViewStateChange}
+                getCursor={() => 'default'}
             >
                 <Map
                     mapStyle={MAP_STYLE}
@@ -153,10 +160,7 @@ const SimpleSpreadMap = () => {
                 />
             </DeckGL>
 
-            {/* Order Book Display */}
             <OrderBookDisplay marketState={marketData} />
-
-            {/* Dev Panel */}
             <DevPanel
                 onVirusBoost={handleVirusBoost}
                 onVirusSuppress={handleVirusSuppress}

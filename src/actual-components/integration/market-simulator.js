@@ -144,17 +144,15 @@ class OrderBook {
 
     generateRandomOrder() {
         const side = Math.random() > 0.5 ? 'buy' : 'sell';
-        const baseAmount = Math.random() * 100;
-        const amount = Math.floor(baseAmount); // Whole numbers for cleaner display
+        const baseAmount = Math.random() * 1000;
+        const amount = Math.floor(baseAmount);
         
         let price;
         if (side === 'buy') {
-            // Generate price slightly below current price
-            const spread = Math.random() * 0.0005; // Tighter spread
+            const spread = Math.random() * 0.0005;
             price = Math.round((this.currentPrice - spread) * 10000) / 10000;
         } else {
-            // Generate price slightly above current price
-            const spread = Math.random() * 0.0005; // Tighter spread
+            const spread = Math.random() * 0.0005;
             price = Math.round((this.currentPrice + spread) * 10000) / 10000;
         }
         
@@ -163,7 +161,7 @@ class OrderBook {
 
     generateWhaleOrder() {
         const side = Math.random() > 0.5 ? 'buy' : 'sell';
-        const amount = 1000 + Math.floor(Math.random() * 4000); // Whole numbers
+        const amount = 5000 + Math.floor(Math.random() * 10000);
         const priceImpact = (Math.random() * 0.001) * (side === 'buy' ? 1 : -1);
         const price = Math.round((this.currentPrice + priceImpact) * 10000) / 10000;
         
@@ -256,9 +254,14 @@ class MarketSimulator {
         if (this.running) return;
         this.running = true;
 
-        // Generate regular orders every 100-500ms for more active trading
+        // Generate initial orders
+        for (let i = 0; i < 50; i++) {
+            this.orderBook.generateRandomOrder();
+        }
+
+        // Generate regular orders every 100-500ms
         this.orderInterval = setInterval(() => {
-            if (Math.random() < 0.7) { // 70% chance each interval
+            if (Math.random() < 0.8) {
                 this.orderBook.generateRandomOrder();
             }
             
@@ -271,19 +274,13 @@ class MarketSimulator {
         this.whaleInterval = setInterval(() => {
             const now = Date.now();
             if (now - this.lastWhaleEvent > this.whaleEventInterval) {
-                if (Math.random() < 0.3) { // 30% chance when interval is reached
+                if (Math.random() < 0.4) {
                     this.orderBook.generateWhaleOrder();
                     this.lastWhaleEvent = now;
-                    // Randomize next whale event interval
                     this.whaleEventInterval = 300000 + (Math.random() * this.whaleEventVariance - this.whaleEventVariance/2);
                 }
             }
-        }, 60000); // Check every minute
-
-        // Initial orders
-        for (let i = 0; i < 20; i++) {
-            this.orderBook.generateRandomOrder();
-        }
+        }, 60000);
     }
 
     updateOrderAges() {
