@@ -31,6 +31,13 @@ const Button = styled.button`
     }
 `;
 
+const WhaleButton = styled(Button)`
+    background: #27ae60;
+    &:hover {
+        background: #2ecc71;
+    }
+`;
+
 const MetricsDisplay = styled.div`
     margin-top: 6px;
     font-size: 0.7rem;
@@ -80,6 +87,38 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
         };
     }, [showMetrics, marketSimulator]);
 
+    const handleWhaleBuy = () => {
+        if (marketSimulator && typeof marketSimulator.generateWhaleOrder === 'function') {
+            const currentPrice = marketSimulator.state?.price || 100;
+            const currentMarketCap = marketSimulator.state?.marketCap || 2000;
+            const orderSize = Math.max(100, currentMarketCap * 0.1); // Minimum size of 100, or 10% of market cap
+            marketSimulator.generateWhaleOrder('buy', orderSize);
+            console.log('Whale Buy Event:', {
+                marketCap: currentMarketCap,
+                orderSize,
+                price: currentPrice
+            });
+        } else {
+            console.warn('Market simulator not properly initialized for whale orders');
+        }
+    };
+
+    const handleWhaleSell = () => {
+        if (marketSimulator && typeof marketSimulator.generateWhaleOrder === 'function') {
+            const currentPrice = marketSimulator.state?.price || 100;
+            const currentMarketCap = marketSimulator.state?.marketCap || 2000;
+            const orderSize = Math.max(100, currentMarketCap * 0.1); // Minimum size of 100, or 10% of market cap
+            marketSimulator.generateWhaleOrder('sell', orderSize);
+            console.log('Whale Sell Event:', {
+                marketCap: currentMarketCap,
+                orderSize,
+                price: currentPrice
+            });
+        } else {
+            console.warn('Market simulator not properly initialized for whale orders');
+        }
+    };
+
     const toggleMetrics = () => {
         if (!showMetrics) {
             setShowMetrics(true);
@@ -110,8 +149,8 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
     return (
         <Panel>
             <ButtonContainer>
-                <Button onClick={onVirusBoost}>Boost</Button>
-                <Button onClick={onVirusSuppress}>Suppress</Button>
+                <WhaleButton onClick={handleWhaleBuy}>Whale Buy</WhaleButton>
+                <WhaleButton onClick={handleWhaleSell}>Whale Sell</WhaleButton>
                 <Button onClick={onResetSimulation}>Reset</Button>
                 <Button onClick={toggleMetrics}>
                     {showMetrics ? 'Hide Stats' : 'Show Stats'}

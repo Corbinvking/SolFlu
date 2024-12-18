@@ -9,6 +9,7 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, 'dist'),
         filename: 'bundle.js',
+        publicPath: '/'
     },
     module: {
         rules: [
@@ -16,7 +17,10 @@ module.exports = {
                 test: /\.(js|jsx)$/,
                 exclude: /node_modules/,
                 use: {
-                    loader: 'babel-loader'
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['@babel/preset-env', '@babel/preset-react']
+                    }
                 }
             },
             {
@@ -30,16 +34,20 @@ module.exports = {
             template: './public/index.html',
             inject: true
         }),
-        new Dotenv()
+        new Dotenv(),
+        new webpack.ProvidePlugin({
+            React: 'react'
+        })
     ],
     resolve: {
         extensions: ['.js', '.jsx'],
-        modules: ['node_modules'],
+        modules: ['node_modules', 'src'],
         alias: {
             '@': path.resolve(__dirname, 'src'),
             '@components': path.resolve(__dirname, 'src/actual-components/components'),
             '@core': path.resolve(__dirname, 'src/actual-components/core'),
-            '@utils': path.resolve(__dirname, 'src/actual-components/utils')
+            '@utils': path.resolve(__dirname, 'src/actual-components/utils'),
+            '@integration': path.resolve(__dirname, 'src/actual-components/integration')
         },
         fallback: {
             "stream": require.resolve("stream-browserify"),
@@ -61,6 +69,7 @@ module.exports = {
         port: 3001,
         hot: true,
         open: true,
+        historyApiFallback: true,
         client: {
             overlay: true,
             progress: true

@@ -3,13 +3,8 @@ import { DeckGL } from '@deck.gl/react';
 import { Map } from 'react-map-gl';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { MAPBOX_TOKEN, MAP_STYLE, INITIAL_VIEW_STATE } from '../../config';
-import MarketSimulator from '../integration/market-simulator';
-import TranslatorBridge from '../integration/translator-bridge';
+import MarketSimulator from '../../utils/market-simulator';
 import VirusStateMachine from '../core/virus-state-machine';
-import RouteSystem from '../core/route-system';
-import { loadIconAtlas } from '../utils/icon-processor';
-import { ensureIconsSetup } from '../utils/setup-icons';
-import OrderBookDisplay from './OrderBookDisplay';
 import DevPanel from '../../components/DevPanel';
 import StageTimelinePanel from './StageTimelinePanel';
 import MarketGrowthStages from '../integration/market-growth-stages';
@@ -27,10 +22,8 @@ const SimpleSpreadMap = () => {
     const [error, setError] = useState(null);
     const [growthStages] = useState(() => new MarketGrowthStages());
     
-    const routeSystemRef = useRef(null);
     const marketRef = useRef(null);
     const virusRef = useRef(null);
-    const translatorRef = useRef(null);
     const animationFrameRef = useRef(null);
     const lastFrameTimeRef = useRef(Date.now());
 
@@ -42,7 +35,6 @@ const SimpleSpreadMap = () => {
                 
                 // Initialize core systems
                 marketRef.current = new MarketSimulator();
-                translatorRef.current = new TranslatorBridge();
                 virusRef.current = new VirusStateMachine();
 
                 // Initialize virus state at center of view
@@ -50,16 +42,11 @@ const SimpleSpreadMap = () => {
                 console.log('Setting initial center at:', center);
                 
                 const initialMarketState = marketRef.current.getMarketState();
-                const initialVirusParams = translatorRef.current.translateMarketState(initialMarketState);
-                virusRef.current.initialize(center, initialVirusParams);
-
-                // Initialize route system with Font Awesome icons
-                console.log('Initializing route system...');
-                routeSystemRef.current = new RouteSystem();
-                
-                // Add test vehicles
-                routeSystemRef.current.addTestVehicles();
-                console.log('Added test vehicles to route system');
+                virusRef.current.initialize(center, {
+                    intensity: 0.5,
+                    colorIntensity: 0.5,
+                    marketCap: initialMarketState.marketCap
+                });
 
                 // Subscribe to market updates
                 marketRef.current.subscribe((marketState) => {
@@ -78,18 +65,6 @@ const SimpleSpreadMap = () => {
                     // Update virus
                     virusRef.current.update(deltaTime);
                     const points = virusRef.current.getPoints();
-                    console.log('Virus Update -', {
-                        deltaTime,
-                        pointCount: points.length,
-                        samplePoint: points.length > 0 ? points[0] : null,
-                        currentLayers: layers.length
-                    });
-
-                    // Update routes
-                    if (routeSystemRef.current) {
-                        console.log('Updating route system, deltaTime:', deltaTime);
-                        routeSystemRef.current.update(deltaTime);
-                    }
 
                     // Update layers
                     setLayers(prevLayers => {
@@ -110,19 +85,10 @@ const SimpleSpreadMap = () => {
                             radiusMaxPixels: 15,
                             parameters: {
                                 depthTest: false
-                            },
-                            updateTriggers: {
-                                getRadius: [points.length, Date.now()],
-                                getFillColor: [points.length, Date.now()]
                             }
                         });
-
-                        // Get updated route layers
-                        const routeLayers = routeSystemRef.current ? routeSystemRef.current.getLayers() : [];
-                        console.log('Route layers:', routeLayers.length);
                         
-                        // Return combined layers with route layers first
-                        return [...routeLayers, virusLayer];
+                        return [virusLayer];
                     });
 
                     animationFrameRef.current = requestAnimationFrame(animate);
@@ -168,8 +134,11 @@ const SimpleSpreadMap = () => {
             const center = [viewState.longitude, viewState.latitude];
             marketRef.current.reset();
             const initialMarketState = marketRef.current.getMarketState();
-            const initialVirusParams = translatorRef.current.translateMarketState(initialMarketState);
-            virusRef.current.initialize(center, initialVirusParams);
+            virusRef.current.initialize(center, {
+                intensity: 0.5,
+                colorIntensity: 0.5,
+                marketCap: initialMarketState.marketCap
+            });
         }
     };
 
@@ -214,7 +183,6 @@ const SimpleSpreadMap = () => {
                 </div>
             )}
 
-            <OrderBookDisplay marketState={marketData} />
             <DevPanel
                 onVirusBoost={handleVirusBoost}
                 onVirusSuppress={handleVirusSuppress}

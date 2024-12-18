@@ -193,6 +193,88 @@ class StageBasedOrderBook {
         
         return false;
     }
+
+    calculateMarketCap() {
+        const buyVolume = Array.from(this.buyLevels.values())
+            .reduce((sum, level) => sum + level.totalAmount, 0);
+        const sellVolume = Array.from(this.sellLevels.values())
+            .reduce((sum, level) => sum + level.totalAmount, 0);
+        
+        // Get the current mid price
+        const midPrice = this.getMidPrice();
+        
+        // Calculate total value using mid price and total volume
+        const totalVolume = buyVolume + sellVolume;
+        const marketCap = midPrice * totalVolume;
+
+        // Ensure minimum market cap based on stage
+        const stageData = this.growthStages.getCurrentStageData();
+        const minMarketCap = stageData.range[0];
+        
+        // Log market cap calculation for debugging
+        if (this.growthStages.debug) {
+            console.log('Market Cap Calculation:', {
+                buyVolume,
+                sellVolume,
+                midPrice,
+                calculatedMarketCap: marketCap,
+                minMarketCap,
+                finalMarketCap: Math.max(marketCap, minMarketCap)
+            });
+        }
+
+        return Math.max(marketCap, minMarketCap);
+    }
+
+    /**
+     * Get the current mid price
+     * @returns {number} Mid price
+     */
+    getMidPrice() {
+        if (this.buyLevels.size === 0 || this.sellLevels.size === 0) {
+            return this.lastPrice || this.initialPrice;
+        }
+        
+        const bestBid = Math.max(...this.buyLevels.keys());
+        const bestAsk = Math.min(...this.sellLevels.keys());
+        return (bestBid + bestAsk) / 2;
+    }
+
+    /**
+     * Check if the order book needs rebalancing
+     * @returns {boolean} Whether rebalancing is needed
+     */
+    needsRebalancing() {
+        const stageData = this.growthStages.getCurrentStageData();
+        const currentSpread = this.getCurrentSpread();
+        const currentMarketCap = this.calculateMarketCap();
+        
+        // Log rebalancing check for debugging
+        if (this.growthStages.debug) {
+            console.log('Rebalancing Check:', {
+                currentSpread,
+                targetSpread: stageData.spreadPercentage * 100,
+                currentMarketCap,
+                stageRange: stageData.range,
+                needsRebalancing: currentSpread > (stageData.spreadPercentage * 100 * 2) ||
+                    this.buyLevels.length < stageData.depthLevels ||
+                    this.sellLevels.length < stageData.depthLevels
+            });
+        }
+        
+        // Check if spread is too wide
+        if (currentSpread > (stageData.spreadPercentage * 100 * 2)) {
+            return true;
+        }
+        
+        // Check if we have enough depth
+        if (this.buyLevels.size < stageData.depthLevels || 
+            this.sellLevels.size < stageData.depthLevels) {
+            return true;
+        }
+        
+        return false;
+    }
 }
 
 export default StageBasedOrderBook; 

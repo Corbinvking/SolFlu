@@ -22,7 +22,11 @@ class MarketSimulator {
             // Momentum tracking
             priceHistory: [],
             volumeHistory: [],
-            momentumScore: 0
+            momentumScore: 0,
+
+            // Whale event tracking
+            lastWhaleEvent: null,
+            whaleImpactMultiplier: 1.0
         };
 
         // Market behavior configuration
@@ -35,7 +39,9 @@ class MarketSimulator {
             holderGrowthRate: 0.05,        // 5% holder growth rate
             maxHolders: 1000000,           // 1M max holders
             historyLength: 100,            // Keep last 100 data points
-            updateInterval: 1000           // 1 second updates
+            updateInterval: 1000,          // 1 second updates
+            whaleEventCooldown: 30000,     // 30 seconds between whale events
+            whaleImpactDuration: 5000      // 5 seconds of whale impact
         };
 
         // Event tracking
@@ -60,8 +66,8 @@ class MarketSimulator {
             this.advancePhase();
         }
 
-        // Calculate organic growth
-        const baseGrowth = this.calculateOrganicGrowth(deltaTime);
+        // Calculate organic growth with whale impact
+        const baseGrowth = this.calculateOrganicGrowth(deltaTime) * this.state.whaleImpactMultiplier;
         const volatility = this.calculateVolatility();
         const momentum = this.calculateMomentum();
         const sentiment = this.state.marketSentiment;
@@ -81,8 +87,9 @@ class MarketSimulator {
         metrics.marketCap *= (1 + limitedGrowth);
         metrics.price = metrics.marketCap / this.state.supply;
 
-        // Update volume
-        metrics.volume24h = this.calculateVolume(metrics.marketCap, deltaTime);
+        // Update volume with whale impact
+        metrics.volume24h = this.calculateVolume(metrics.marketCap, deltaTime) * 
+            this.state.whaleImpactMultiplier;
 
         // Update holders
         metrics.holders = this.updateHolders(deltaTime);
@@ -263,6 +270,75 @@ class MarketSimulator {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
         }
+    }
+
+    generateWhaleOrder(side, size) {
+        const now = Date.now();
+        
+        // Check cooldown
+        if (this.state.lastWhaleEvent && 
+            (now - this.state.lastWhaleEvent) < this.config.whaleEventCooldown) {
+            console.log('Whale event cooldown active');
+            return false;
+        }
+
+        // Calculate impact based on current phase and market cap
+        let impactMultiplier;
+        switch (this.state.phase) {
+            case 'initial':
+                impactMultiplier = 2.0;  // Highest impact in initial phase
+                break;
+            case 'early_growth':
+                impactMultiplier = 1.5;  // Moderate impact in early growth
+                break;
+            case 'stabilization':
+                impactMultiplier = 1.0;  // Normal impact in stabilization
+                break;
+            default:
+                impactMultiplier = 1.0;
+        }
+
+        // Calculate base impact relative to market cap
+        const baseImpact = (size / this.state.marketCap) * impactMultiplier;
+        const impact = side === 'buy' ? baseImpact : -baseImpact;
+
+        // Create whale event
+        const whaleEvent = {
+            type: `whale_${side}`,
+            timestamp: now,
+            impact: impact,
+            size: size
+        };
+
+        // Apply immediate impact
+        this.state.marketCap *= (1 + impact);
+        this.state.whaleImpactMultiplier = 1 + (impact * 0.5);
+        this.state.marketSentiment = Math.max(0, Math.min(1,
+            this.state.marketSentiment + (impact * 0.3)));
+
+        // Update state
+        this.state.lastWhaleEvent = now;
+        this.events.push(whaleEvent);
+
+        // Keep only recent events
+        while (this.events.length > 10) {
+            this.events.shift();
+        }
+
+        // Schedule impact decay
+        setTimeout(() => {
+            this.state.whaleImpactMultiplier = 1.0;
+        }, this.config.whaleImpactDuration);
+
+        console.log('Whale Event Generated:', {
+            side,
+            size,
+            impact,
+            marketCap: this.state.marketCap,
+            sentiment: this.state.marketSentiment
+        });
+
+        return true;
     }
 }
 

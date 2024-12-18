@@ -15,11 +15,22 @@ const StageBasedMarketDisplay = ({ orderBook, growthStages, isTestEnvironment = 
     useEffect(() => {
         const updateDisplay = () => {
             if (orderBook && growthStages) {
-                setDepthData(orderBook.getDepth());
+                const depth = orderBook.getDepth();
+                setDepthData(depth);
+                
                 const stageData = growthStages.getCurrentStageData();
                 if (stageData) {
                     setCurrentStage(stageData);
                     isInitializedRef.current = true;
+
+                    // Log stage and market data for debugging
+                    console.log('Market Display Update:', {
+                        stage: stageData.name,
+                        marketCap: growthStages.currentMarketCap,
+                        stageRange: stageData.range,
+                        orderCount: depth.bids.length + depth.asks.length,
+                        midPrice: depth.lastPrice
+                    });
                 }
             }
 
@@ -47,6 +58,8 @@ const StageBasedMarketDisplay = ({ orderBook, growthStages, isTestEnvironment = 
     }, [orderBook, growthStages, isTestEnvironment]);
 
     const getStageColor = () => {
+        if (!currentStage) return '#ffffff';
+        
         const stageColors = {
             'LAUNCH': '#ff4444',
             'EARLY_GROWTH': '#ffbb33',
@@ -55,7 +68,15 @@ const StageBasedMarketDisplay = ({ orderBook, growthStages, isTestEnvironment = 
             'MATURATION': '#2BBBAD',
             'PEAK': '#4285F4'
         };
-        return currentStage ? stageColors[currentStage.name] : '#ffffff';
+
+        const progress = (growthStages.currentMarketCap - currentStage.range[0]) / 
+                        (currentStage.range[1] - currentStage.range[0]);
+        
+        // Adjust color intensity based on progress
+        const color = stageColors[currentStage.name];
+        const intensity = 0.5 + (progress * 0.5); // 50% to 100% intensity
+        
+        return color;
     };
 
     const formatPrice = (price) => {

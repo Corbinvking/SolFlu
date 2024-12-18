@@ -4,7 +4,7 @@
  * Works with MarketGrowthStages to create realistic order flow
  */
 
-import orderVerification from './utils/order-verification';
+import orderVerification from '@integration/utils/order-verification';
 
 class StageBasedOrderGenerator {
     constructor(growthStages) {

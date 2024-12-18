@@ -1,5 +1,5 @@
-import PerformanceMonitor from './performance-monitor';
-import MessageQueue from './message-queue';
+import PerformanceMonitor from '@integration/performance-monitor';
+import MessageQueue from '@integration/message-queue';
 
 class Order {
     constructor(price, amount, side, makerId = null) {
