@@ -1,55 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import PerformanceDisplay from './PerformanceDisplay';
 
 const Panel = styled.div`
     position: fixed;
     top: 20px;
     left: 20px;
     background: rgba(0, 0, 0, 0.8);
-    padding: 15px;
-    border-radius: 8px;
+    padding: 10px;
+    border-radius: 6px;
     color: white;
     font-family: monospace;
     z-index: 1000;
-    max-width: 200px;
+    width: fit-content;
+    transform: scale(0.75);
+    transform-origin: top left;
 `;
 
 const Button = styled.button`
     background: #2c3e50;
     color: white;
     border: none;
-    padding: 8px 12px;
-    margin: 5px;
-    border-radius: 4px;
+    padding: 4px 8px;
+    margin: 2px;
+    border-radius: 3px;
     cursor: pointer;
+    font-size: 0.75rem;
     &:hover {
         background: #34495e;
     }
 `;
 
 const MetricsDisplay = styled.div`
-    margin-top: 10px;
-    font-size: 12px;
+    margin-top: 6px;
+    font-size: 0.7rem;
     border-top: 1px solid #666;
-    padding-top: 10px;
+    padding-top: 6px;
+    width: 100%;
 `;
 
 const MetricRow = styled.div`
     display: flex;
     justify-content: space-between;
     margin: 2px 0;
+    gap: 8px;
 `;
 
 const ButtonContainer = styled.div`
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-bottom: 10px;
+    gap: 3px;
+    margin-bottom: 6px;
+    width: 100%;
 `;
 
-const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimulator }) => {
+const ChildrenContainer = styled.div`
+    margin-top: 8px;
+    border-top: 1px solid #666;
+    padding-top: 8px;
+    width: 100%;
+`;
+
+const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimulator, children }) => {
     const [metrics, setMetrics] = useState(null);
     const [showMetrics, setShowMetrics] = useState(false);
+    const [showTimeline, setShowTimeline] = useState(false);
+    const [showPerformance, setShowPerformance] = useState(false);
 
     useEffect(() => {
         let interval;
@@ -78,6 +94,19 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
         }
     };
 
+    const toggleTimeline = () => {
+        setShowTimeline(!showTimeline);
+    };
+
+    const togglePerformance = () => {
+        setShowPerformance(!showPerformance);
+        if (!showPerformance && marketSimulator && marketSimulator.performanceMonitor) {
+            marketSimulator.performanceMonitor.enableDebug();
+        } else if (marketSimulator && marketSimulator.performanceMonitor) {
+            marketSimulator.performanceMonitor.disableDebug();
+        }
+    };
+
     return (
         <Panel>
             <ButtonContainer>
@@ -87,36 +116,40 @@ const DevPanel = ({ onVirusBoost, onVirusSuppress, onResetSimulation, marketSimu
                 <Button onClick={toggleMetrics}>
                     {showMetrics ? 'Hide Stats' : 'Show Stats'}
                 </Button>
+                <Button onClick={toggleTimeline}>
+                    {showTimeline ? 'Hide Timeline' : 'Show Timeline'}
+                </Button>
+                <Button onClick={togglePerformance}>
+                    {showPerformance ? 'Hide Performance' : 'Show Performance'}
+                </Button>
             </ButtonContainer>
 
-            {showMetrics && metrics && (
+            {showMetrics && metrics && metrics.market && (
                 <MetricsDisplay>
                     <MetricRow>
                         <span>Orders:</span>
-                        <span>{metrics.orderCount}</span>
-                    </MetricRow>
-                    <MetricRow>
-                        <span>Update Rate:</span>
-                        <span>{metrics.updateRate.toFixed(1)}/s</span>
+                        <span>{metrics.system.queueSize}</span>
                     </MetricRow>
                     <MetricRow>
                         <span>Market Cap:</span>
-                        <span>${metrics.marketCap.toLocaleString()}</span>
+                        <span>{metrics.market.marketCap}</span>
                     </MetricRow>
                     <MetricRow>
                         <span>Volatility:</span>
-                        <span>{(metrics.volatility * 100).toFixed(1)}%</span>
+                        <span>{metrics.market.volatility}</span>
                     </MetricRow>
                     <MetricRow>
-                        <span>Queue Size:</span>
-                        <span>{metrics.messageQueueSize}</span>
-                    </MetricRow>
-                    <MetricRow>
-                        <span>Update Time:</span>
-                        <span>{metrics.lastUpdateDuration.toFixed(1)}ms</span>
+                        <span>FPS:</span>
+                        <span>{metrics.fps}</span>
                     </MetricRow>
                 </MetricsDisplay>
             )}
+
+            {showPerformance && marketSimulator && marketSimulator.performanceMonitor && (
+                <PerformanceDisplay performanceMonitor={marketSimulator.performanceMonitor} />
+            )}
+
+            {children && React.cloneElement(children, { isVisible: showTimeline })}
         </Panel>
     );
 };

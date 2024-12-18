@@ -9,7 +9,7 @@ class MarketGrowthStages {
         // Define growth stages with their characteristics
         this.STAGES = {
             LAUNCH: {
-                name: 'Launch Phase',
+                name: 'LAUNCH',
                 range: [2000, 10000],           // Market cap range in USD
                 growthRate: 1.5,                // Exponential growth multiplier
                 orderSizeRange: [5, 20],        // Order size range in USD
@@ -20,7 +20,7 @@ class MarketGrowthStages {
                 description: 'Initial launch phase with micro-orders and high volatility'
             },
             EARLY_GROWTH: {
-                name: 'Early Growth',
+                name: 'EARLY_GROWTH',
                 range: [10000, 100000],
                 growthRate: 1.3,
                 orderSizeRange: [50, 500],
@@ -31,7 +31,7 @@ class MarketGrowthStages {
                 description: 'Early adoption phase with increasing order sizes'
             },
             VIRAL: {
-                name: 'Viral Growth',
+                name: 'VIRAL',
                 range: [100000, 1000000],
                 growthRate: 1.2,
                 orderSizeRange: [100, 2000],
@@ -42,7 +42,7 @@ class MarketGrowthStages {
                 description: 'Viral growth phase with peak trading activity'
             },
             ESTABLISHMENT: {
-                name: 'Establishment',
+                name: 'ESTABLISHMENT',
                 range: [1000000, 10000000],
                 growthRate: 1.1,
                 orderSizeRange: [500, 5000],
@@ -53,7 +53,7 @@ class MarketGrowthStages {
                 description: 'Establishment phase with larger, more stable orders'
             },
             MATURATION: {
-                name: 'Maturation',
+                name: 'MATURATION',
                 range: [10000000, 100000000],
                 growthRate: 1.05,
                 orderSizeRange: [1000, 20000],
@@ -64,7 +64,7 @@ class MarketGrowthStages {
                 description: 'Maturation phase with institutional-size orders'
             },
             PEAK: {
-                name: 'Peak Growth',
+                name: 'PEAK',
                 range: [100000000, 500000000],
                 growthRate: 1.02,
                 orderSizeRange: [5000, 100000],
@@ -87,6 +87,34 @@ class MarketGrowthStages {
             growthRate: 1.5,       // Current growth rate
             lastUpdate: Date.now() // Last update timestamp
         };
+
+        // Stage transition callback
+        this.onStageChange = null;
+    }
+
+    /**
+     * Set callback for stage transitions
+     * @param {Function} callback Callback function
+     */
+    setStageChangeCallback(callback) {
+        this.onStageChange = callback;
+    }
+
+    /**
+     * Update current market cap
+     * @param {number} newMarketCap New market cap value
+     */
+    setMarketCap(newMarketCap) {
+        const oldStage = this.currentStage;
+        this.currentMarketCap = newMarketCap;
+        
+        // Check for stage progression
+        if (this.shouldAdvanceStage()) {
+            const newStage = this.progressStage();
+            if (newStage && this.onStageChange) {
+                this.onStageChange(oldStage, newStage.name, newMarketCap);
+            }
+        }
     }
 
     /**
@@ -164,7 +192,13 @@ class MarketGrowthStages {
         const currentIndex = stages.indexOf(this.currentStage);
         
         if (currentIndex < stages.length - 1 && this.shouldAdvanceStage()) {
+            const oldStage = this.currentStage;
             this.currentStage = stages[currentIndex + 1];
+            
+            if (this.onStageChange) {
+                this.onStageChange(oldStage, this.currentStage, this.currentMarketCap);
+            }
+            
             console.log(`Advanced to ${this.currentStage} stage at market cap $${this.currentMarketCap}`);
             return this.getCurrentStageData();
         }

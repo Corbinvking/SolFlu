@@ -1,0 +1,77 @@
+.trading-dom-integration {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    background: #1a1a1a;
+    color: #ffffff;
+    min-height: 100vh;
+}
+
+.market-info {
+    background: #2a2a2a;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.market-info h2 {
+    margin: 0 0 1rem 0;
+    color: #4CAF50;
+    font-size: 1.5rem;
+}
+
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.metrics > div {
+    background: #333333;
+    padding: 0.75rem;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.market-controls {
+    background: #2a2a2a;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+/* Stage-specific colors */
+.stage-launch { color: #ff4444; }
+.stage-early-growth { color: #ffbb33; }
+.stage-viral { color: #00C851; }
+.stage-establishment { color: #33b5e5; }
+.stage-maturation { color: #2BBBAD; }
+.stage-peak { color: #4285F4; }
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.price-update {
+    animation: pulse 0.5s ease-in-out;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .metrics {
+        grid-template-columns: 1fr;
+    }
+    
+    .market-controls {
+        flex-direction: column;
+    }
+} 

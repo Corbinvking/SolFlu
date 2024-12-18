@@ -314,39 +314,62 @@ class MarketSimulator {
         const deltaTime = now - this.lastUpdate;
 
         if (deltaTime >= this.updateInterval) {
-            // Generate new orders
-            const orderCount = Math.floor(Math.random() * 3) + 1; // 1-3 orders per update
-            for (let i = 0; i < orderCount; i++) {
-                if (Math.random() < 0.1) { // 10% chance for whale order
-                    this.orderBook.generateWhaleOrder();
-                } else {
-                    this.orderBook.generateRandomOrder();
+            // Measure the entire update operation
+            this.performanceMonitor.measureOperation(() => {
+                // Generate new orders
+                const orderCount = Math.floor(Math.random() * 3) + 1; // 1-3 orders per update
+                for (let i = 0; i < orderCount; i++) {
+                    if (Math.random() < 0.1) { // 10% chance for whale order
+                        this.orderBook.generateWhaleOrder();
+                    } else {
+                        this.orderBook.generateRandomOrder();
+                    }
                 }
-            }
 
-            // Remove some old orders
-            this.cleanupOldOrders();
-            this.lastUpdate = now;
+                // Remove some old orders
+                this.cleanupOldOrders();
+
+                // Update market metrics
+                const marketState = this.getMarketState();
+                this.performanceMonitor.updateMarketMetrics({
+                    marketCap: this.orderBook.calculateMarketCap(),
+                    volatility: this.orderBook.calculateVolatility()
+                });
+
+                // Update queue size metric
+                this.performanceMonitor.setQueueSize(this.messageQueue.size());
+
+                this.lastUpdate = now;
+            }, 'stateUpdates');
         }
 
-        // Schedule next update
-        requestAnimationFrame(() => this.update());
-    }
-
-    cleanupOldOrders() {
-        const state = this.orderBook.getMarketState();
-        const now = Date.now();
-        const maxAge = 30000; // 30 seconds
-
-        [...state.buyOrders, ...state.sellOrders].forEach(order => {
-            if (now - order.timestamp > maxAge) {
-                this.orderBook.removeOrder(order.makerId, order.price, order.side);
-            }
+        // Measure frame time
+        const frameStart = performance.now();
+        requestAnimationFrame(() => {
+            const frameDuration = performance.now() - frameStart;
+            this.performanceMonitor.addMetric('frameTime', frameDuration);
+            this.update();
         });
     }
 
+    cleanupOldOrders() {
+        this.performanceMonitor.measureOperation(() => {
+            const state = this.orderBook.getMarketState();
+            const now = Date.now();
+            const maxAge = 30000; // 30 seconds
+
+            [...state.buyOrders, ...state.sellOrders].forEach(order => {
+                if (now - order.timestamp > maxAge) {
+                    this.orderBook.removeOrder(order.makerId, order.price, order.side);
+                }
+            });
+        }, 'orderProcessing');
+    }
+
     getMarketState() {
-        return this.orderBook.getMarketState();
+        return this.performanceMonitor.measureOperation(() => {
+            return this.orderBook.getMarketState();
+        }, 'stateUpdates');
     }
 
     subscribe(callback) {
@@ -371,16 +394,7 @@ class MarketSimulator {
     }
 
     getPerformanceMetrics() {
-        return {
-            orderCount: this.orderBook.buyLevels.size + this.orderBook.sellLevels.size,
-            updateRate: 1000 / this.updateInterval,
-            marketCap: this.orderBook.calculateMarketCap(),
-            volatility: this.orderBook.calculateVolatility(),
-            messageQueueSize: this.messageQueue.size(),
-            lastUpdateDuration: this.performanceMonitor.getLastUpdateDuration(),
-            averageUpdateDuration: this.performanceMonitor.getAverageUpdateDuration(),
-            peakUpdateDuration: this.performanceMonitor.getPeakUpdateDuration()
-        };
+        return this.performanceMonitor.getPerformanceReport();
     }
 
     enablePerformanceDebug() {

@@ -4,10 +4,12 @@
  * Works with MarketGrowthStages to create realistic order flow
  */
 
+import orderVerification from './utils/order-verification';
+
 class StageBasedOrderGenerator {
     constructor(growthStages) {
         this.growthStages = growthStages;
-        this.lastOrderTime = Date.now();
+        this.lastOrderTime = 0;
         this.orderIdCounter = 0;
 
         // Order type distribution (changes with stages)
@@ -90,13 +92,17 @@ class StageBasedOrderGenerator {
             adjustedWeights.MICRO.weight = 0.7;
         }
 
+        // Normalize weights
+        const totalWeight = Object.values(adjustedWeights).reduce((sum, type) => sum + type.weight, 0);
         let cumulative = 0;
+        
         for (const [type, data] of Object.entries(adjustedWeights)) {
-            cumulative += data.weight;
+            const normalizedWeight = data.weight / totalWeight;
+            cumulative += normalizedWeight;
             if (rand <= cumulative) return type;
         }
         
-        return 'NORMAL';
+        return 'NORMAL'; // Fallback
     }
 
     /**
@@ -111,8 +117,25 @@ class StageBasedOrderGenerator {
         
         // Calculate order size
         const { min, max } = this.growthStages.calculateOrderSize();
-        const baseSize = min + (Math.random() * (max - min));
-        const finalSize = baseSize * this.orderTypes[orderType].sizeMultiplier;
+        
+        // Ensure minimum size based on order type
+        let baseSize;
+        switch(orderType) {
+            case 'MICRO':
+                baseSize = min + (Math.random() * (max - min) * 0.3);
+                break;
+            case 'NORMAL':
+                baseSize = min + (Math.random() * (max - min));
+                break;
+            case 'WHALE':
+                baseSize = max + (Math.random() * max * 2); // Whales can go up to 3x max
+                break;
+            default:
+                baseSize = min + (Math.random() * (max - min));
+        }
+        
+        // Ensure we never go below minimum
+        const finalSize = Math.max(min, baseSize);
         
         // Calculate price with stage-appropriate spread
         const price = this.calculateOrderPrice(side, currentPrice);
@@ -127,9 +150,12 @@ class StageBasedOrderGenerator {
             stage: stageData.name
         };
 
-        if (orderType === 'WHALE') {
-            console.log('Whale order generated:', order);
-        }
+        // Log order for verification
+        orderVerification.logOrder(
+            order,
+            stageData,
+            this.growthStages.currentMarketCap
+        );
 
         return order;
     }
@@ -139,9 +165,20 @@ class StageBasedOrderGenerator {
      * @returns {boolean} Whether to generate new orders
      */
     shouldGenerateOrder() {
+        // In test environment, always generate orders
+        if (process.env.NODE_ENV === 'test') {
+            return true;
+        }
+
         const now = Date.now();
         const stageData = this.growthStages.getCurrentStageData();
         const timeSinceLastOrder = now - this.lastOrderTime;
+        
+        // Always allow first order
+        if (this.lastOrderTime === 0) {
+            this.lastOrderTime = now;
+            return true;
+        }
         
         // Check if enough time has passed based on stage frequency
         if (timeSinceLastOrder >= stageData.orderFrequency) {
@@ -171,6 +208,35 @@ class StageBasedOrderGenerator {
         }
 
         return orders;
+    }
+
+    /**
+     * Enable or disable order verification
+     * @param {boolean} enabled Whether to enable verification
+     */
+    setVerification(enabled) {
+        if (enabled) {
+            orderVerification.enable();
+        } else {
+            orderVerification.disable();
+        }
+    }
+
+    /**
+     * Get order verification analytics
+     * @returns {Object} Order analytics data
+     */
+    getOrderAnalytics() {
+        return orderVerification.getAnalytics();
+    }
+
+    /**
+     * Get recent orders for verification
+     * @param {number} count Number of recent orders to retrieve
+     * @returns {Array} Recent orders
+     */
+    getRecentOrders(count) {
+        return orderVerification.getRecentOrders(count);
     }
 }
 

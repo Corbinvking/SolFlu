@@ -11,7 +11,8 @@ import { loadIconAtlas } from '../utils/icon-processor';
 import { ensureIconsSetup } from '../utils/setup-icons';
 import OrderBookDisplay from './OrderBookDisplay';
 import DevPanel from '../../components/DevPanel';
-import PerformanceReport from '../../components/PerformanceReport';
+import StageTimelinePanel from './StageTimelinePanel';
+import MarketGrowthStages from '../integration/market-growth-stages';
 
 const SimpleSpreadMap = () => {
     const [layers, setLayers] = useState([]);
@@ -24,6 +25,7 @@ const SimpleSpreadMap = () => {
         currentPrice: 0.03
     });
     const [error, setError] = useState(null);
+    const [growthStages] = useState(() => new MarketGrowthStages());
     
     const routeSystemRef = useRef(null);
     const marketRef = useRef(null);
@@ -218,8 +220,9 @@ const SimpleSpreadMap = () => {
                 onVirusSuppress={handleVirusSuppress}
                 onResetSimulation={handleResetSimulation}
                 marketSimulator={marketRef.current}
-            />
-            <PerformanceReport marketSimulator={marketRef.current} />
+            >
+                <StageTimelinePanel growthStages={growthStages} />
+            </DevPanel>
         </div>
     );
 };

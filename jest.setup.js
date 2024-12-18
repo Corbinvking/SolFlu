@@ -1,52 +1,49 @@
 import '@testing-library/jest-dom';
 
-// Mock performance.now() if it doesn't exist
-if (!global.performance) {
-    global.performance = {
-        now: () => Date.now()
-    };
+// Mock window functions that might not be available in JSDOM
+if (typeof window !== 'undefined') {
+    window.requestAnimationFrame = window.requestAnimationFrame || (cb => setTimeout(cb, 0));
+    window.cancelAnimationFrame = window.cancelAnimationFrame || (id => clearTimeout(id));
 }
 
-// Mock requestAnimationFrame
-global.requestAnimationFrame = callback => setTimeout(callback, 0);
-global.cancelAnimationFrame = id => clearTimeout(id); 
+// Mock ResizeObserver
+class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+}
 
-// Increase timeout for all tests
-jest.setTimeout(60000);
+window.ResizeObserver = window.ResizeObserver || ResizeObserverMock;
 
-// Only mock WebSocket for unit tests, not integration tests
-if (process.env.NODE_ENV !== 'integration') {
-    const { EventEmitter } = require('events');
-    class MockWebSocket extends EventEmitter {
-        constructor(url) {
-            super();
-            this.url = url;
-            this.readyState = WebSocket.OPEN;
-            this.send = jest.fn();
-            this.close = jest.fn();
-            setTimeout(() => this.emit('open'), 0);
-        }
+// Mock IntersectionObserver
+class IntersectionObserverMock {
+    constructor(callback) {
+        this.callback = callback;
     }
-    MockWebSocket.CONNECTING = 0;
-    MockWebSocket.OPEN = 1;
-    MockWebSocket.CLOSING = 2;
-    MockWebSocket.CLOSED = 3;
-    global.WebSocket = MockWebSocket;
+    observe() {}
+    unobserve() {}
+    disconnect() {}
 }
 
-// Global test environment setup
-beforeAll(() => {
-    // Add any global setup here
-});
+window.IntersectionObserver = window.IntersectionObserver || IntersectionObserverMock;
 
-// Global test environment teardown
-afterAll(() => {
-    // Add any global cleanup here
-});
+// Mock matchMedia
+window.matchMedia = window.matchMedia || function() {
+    return {
+        matches: false,
+        addListener: function() {},
+        removeListener: function() {}
+    };
+};
 
-const WebSocket = require('ws');
-
-// Set up WebSocket for Node environment
-if (!global.WebSocket) {
-    global.WebSocket = WebSocket;
-}
+// Suppress console errors during tests
+const originalError = console.error;
+console.error = (...args) => {
+    if (
+        /Warning.*not wrapped in act/.test(args[0]) ||
+        /Warning.*Cannot update a component/.test(args[0])
+    ) {
+        return;
+    }
+    originalError.call(console, ...args);
+};

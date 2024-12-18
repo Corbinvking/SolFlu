@@ -1,1 +1,163 @@
- 
+.stage-based-market-display {
+    background: #1a1a1a;
+    color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    font-family: 'Roboto', sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.stage-info {
+    border: 2px solid;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    transition: border-color 0.3s ease;
+}
+
+.stage-info h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.5em;
+    font-weight: 500;
+}
+
+.stage-info p {
+    margin: 0;
+    color: #cccccc;
+    font-size: 0.9em;
+}
+
+.market-metrics {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.metric {
+    text-align: center;
+}
+
+.metric label {
+    display: block;
+    color: #999;
+    font-size: 0.8em;
+    margin-bottom: 5px;
+}
+
+.metric span {
+    font-size: 1.2em;
+    font-weight: 500;
+}
+
+.order-book {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.depth-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 8px 15px;
+    font-size: 0.9em;
+    border-radius: 4px;
+    margin: 2px 0;
+    transition: background 0.3s ease;
+}
+
+.depth-row:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.depth-row .price {
+    color: #4CAF50;
+}
+
+.asks .depth-row .price {
+    color: #f44336;
+}
+
+.depth-row .amount {
+    text-align: center;
+    color: #bbb;
+}
+
+.depth-row .total {
+    text-align: right;
+    color: #999;
+}
+
+.spread-indicator {
+    text-align: center;
+    padding: 10px;
+    font-size: 0.9em;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.3);
+    margin: 10px 0;
+    border-radius: 4px;
+    transition: color 0.3s ease;
+}
+
+/* Animation for price changes */
+@keyframes priceFlash {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.price-flash {
+    animation: priceFlash 0.3s ease;
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+    .stage-based-market-display {
+        padding: 10px;
+    }
+
+    .market-metrics {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .depth-row {
+        font-size: 0.8em;
+        padding: 6px 10px;
+    }
+}
+
+/* Dark theme enhancements */
+.dark-theme .stage-based-market-display {
+    background: #121212;
+}
+
+.dark-theme .stage-info {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.dark-theme .market-metrics {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Loading state styles */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+} 
